@@ -56,6 +56,19 @@ export interface DomainItem {
   verifikator: string | null;
 }
 
+export interface DomainDetailPage {
+  url: string;
+  status: DomainStatus;
+  confidence_score: number;
+  ai_reasoning: string;
+  user_reasoning?: string;
+  kata_kunci: string[];
+  crawled_at: string;
+  vit_score: number;
+  screenshots: { url: string; caption: string }[];
+  konten_terekstrak: string;
+}
+
 export interface DomainDetail {
   domain: string;
   url: string;
@@ -69,6 +82,7 @@ export interface DomainDetail {
   screenshots: { url: string; caption: string }[];
   konten_terekstrak: string;
   total_url_in_domain: number;
+  grouped_pages?: DomainDetailPage[];
 }
 
 export interface ServiceStatus {
