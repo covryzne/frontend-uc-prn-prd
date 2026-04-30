@@ -1,7 +1,7 @@
 export type UserRole = "Admin" | "Verifikator";
 
 export interface User {
-  id: number;
+  id: string | number;
   nama: string;
   email: string;
   role: UserRole;
@@ -47,13 +47,14 @@ export interface VerifikasiTerakhirItem {
 export type DomainStatus = "Pornografi" | "Non-Pornografi" | "Manual Check";
 
 export interface DomainItem {
-  id: number;
+  id: string;
   timestamp: string;
   domain: string;
   status: DomainStatus;
   score: number;
-  screenshot: string;
+  screenshot: string | null;
   verifikator: string | null;
+  urlCount?: number;
 }
 
 export interface DomainDetailPage {

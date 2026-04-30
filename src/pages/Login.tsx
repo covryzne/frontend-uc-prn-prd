@@ -13,17 +13,22 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email || !password) {
       setError("Email dan password harus diisi");
       return;
     }
-    const ok = login(email, password);
+
+    setSubmitting(true);
+    const ok = await login(email, password);
+    setSubmitting(false);
+
     if (ok) navigate("/dashboard");
-    else setError("Email atau password tidak valid");
+    else setError("Email atau password tidak valid.");
   };
 
   return (
@@ -39,12 +44,13 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Username</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@komdigi.go.id"
+                placeholder="Username"
                 value={email}
+                disabled={submitting}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
@@ -55,16 +61,17 @@ export default function Login() {
                 type="password"
                 placeholder="••••••••"
                 value={password}
+                disabled={submitting}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full">
-              Masuk
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "Masuk..." : "Masuk"}
             </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              Gunakan email dari daftar user mock untuk login
-            </p>
+            {/* <p className="text-xs text-center text-muted-foreground">
+              Login menggunakan akun user yang terdaftar di database backend
+            </p> */}
           </form>
         </CardContent>
       </Card>

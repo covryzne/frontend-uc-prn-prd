@@ -766,7 +766,7 @@ export const defaultWhitelist = [
   ".mil.id",
   ".desa.id",
 ];
-export const defaultSearchEngines = ["Google", "Baidu"];
+export const defaultSearchEngines = ["Google"];
 export const searchEngineOptions = ["Google", "Baidu", "Bing"];
 export const crawlScheduleOptions = [
   "Setiap 30 menit",

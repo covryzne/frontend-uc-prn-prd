@@ -25,7 +25,7 @@ import {
   mockKeywords,
 } from "@/data/mockData";
 import type { KeywordItem } from "@/types";
-import { X, Plus, Pencil, Trash2 } from "lucide-react";
+import { X, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 
 export default function AdminConsole() {
   const [engines, setEngines] = useState(defaultSearchEngines);
@@ -37,6 +37,7 @@ export default function AdminConsole() {
   const [kwPerPage, setKwPerPage] = useState(10);
   const [kwModalOpen, setKwModalOpen] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
+  const [isCrawling, setIsCrawling] = useState(false);
 
   const toggleEngine = (e: string) => {
     setEngines((prev) =>
@@ -60,6 +61,15 @@ export default function AdminConsole() {
       setNewKeyword("");
       setKwModalOpen(false);
     }
+  };
+
+  const startCrawl = async () => {
+    setIsCrawling(true);
+
+    // Placeholder async process until backend crawl endpoint is connected.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    setIsCrawling(false);
   };
 
   const paginatedKw = keywords.slice(
@@ -133,7 +143,7 @@ export default function AdminConsole() {
       </Card>
 
       {/* Crawl Schedule */}
-      <Card className="w-full sm:flex-1">
+      {/* <Card className="w-full sm:flex-1">
         <CardContent className="p-5 space-y-3">
           <Label className="text-sm font-semibold">Jadwal Crawl Otomatis</Label>
           <Select value={schedule} onValueChange={setSchedule}>
@@ -152,7 +162,7 @@ export default function AdminConsole() {
             Keyword akan di-crawl secara otomatis sesuai jadwal yang dipilih
           </p>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Keywords */}
       <Card className="w-full sm:flex-1">
@@ -161,10 +171,26 @@ export default function AdminConsole() {
             <Label className="text-sm font-semibold">
               Daftar Keyword ({keywords.length.toLocaleString("id-ID")})
             </Label>
-            <Button size="sm" onClick={() => setKwModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Tambah Keyword
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setKwModalOpen(true)}>
+                Add Keyword
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={startCrawl}
+                disabled={isCrawling}
+              >
+                {isCrawling ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Memulai Crawling...
+                  </>
+                ) : (
+                  "Start Crawl"
+                )}
+              </Button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
