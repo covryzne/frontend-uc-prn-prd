@@ -197,9 +197,10 @@ const WIB_TIME_ZONE = "Asia/Jakarta";
 
 const formatWibDateTime = (value?: string): string => {
   if (!value) return "-";
-  const normalizedValue = value.includes(" ") && !value.includes("T")
-    ? value.replace(" ", "T")
-    : value;
+  const normalizedValue =
+    value.includes(" ") && !value.includes("T")
+      ? value.replace(" ", "T")
+      : value;
   const parsed = new Date(normalizedValue);
   if (Number.isNaN(parsed.getTime())) return "-";
 
