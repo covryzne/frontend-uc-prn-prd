@@ -104,4 +104,5 @@ export interface LogItem {
 export interface KeywordItem {
   no: number;
   keyword: string;
+  id?: string;
 }
