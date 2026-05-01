@@ -8,6 +8,7 @@ const ENDPOINTS = {
   USER_TOGGLE_ADMIN: (userId: string, isAdmin: boolean) =>
     `${APP_BASE_URL_API}/api/users/${userId}/toggle-admin?is_admin=${isAdmin}`,
   DATA_DOMAINS: `${APP_BASE_URL_API}/api/data/domains`,
+  DATA_DASHBOARD: `${APP_BASE_URL_API}/api/data/stats/dashboard`,
   DATA_DOMAIN_DETAIL: (domainId: string) =>
     `${APP_BASE_URL_API}/api/data/domains/${domainId}`,
   DATA_DOMAIN_STATUS: (domainId: string) =>
