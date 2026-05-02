@@ -5,6 +5,7 @@ export interface ScheduleItem {
   keyword: string;
   status: string | null;
   interval: string | null;
+  crawl_engine: string | null;
   last_run_at: string | null;
   next_run_at: string | null;
   is_running: boolean;
@@ -45,10 +46,20 @@ async function runNow(id: string) {
   return res.json();
 }
 
-async function updateSchedule(id: string, interval?: string, start?: boolean) {
-  const body: any = {};
+async function updateSchedule(
+  id: string,
+  interval?: string,
+  start?: boolean,
+  crawlEngine?: string,
+) {
+  const body: {
+    interval?: string;
+    start?: boolean;
+    crawl_engine?: string;
+  } = {};
   if (interval !== undefined) body.interval = interval;
   if (start !== undefined) body.start = start;
+  if (crawlEngine !== undefined) body.crawl_engine = crawlEngine;
 
   const res = await fetch(ENDPOINTS.SCHEDULE_UPDATE(id), {
     method: "POST",

@@ -17,10 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Pagination } from "@/components/shared/Pagination";
-import {
-  defaultSearchEngines,
-  searchEngineOptions,
-} from "@/data/mockData";
+import { defaultSearchEngines, searchEngineOptions } from "@/data/mockData";
 import type { KeywordItem } from "@/types";
 import { X, Plus, Pencil, Trash2 } from "lucide-react";
 import {
@@ -102,6 +99,12 @@ export default function AdminConsole() {
   useEffect(() => {
     if (managedSchedule) {
       setSelectedIntervalLocal(managedSchedule.interval || "1h");
+      const loadedEngines = (managedSchedule.crawl_engine || "google")
+        .split(",")
+        .map((token) => token.trim().toLowerCase())
+        .filter(Boolean)
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1));
+      setEngines(loadedEngines.length > 0 ? loadedEngines : ["Google"]);
     }
   }, [managedSchedule]);
 
@@ -123,9 +126,28 @@ export default function AdminConsole() {
 
   const onConfirmChange = async () => {
     if (!managedSchedule || !pendingInterval) return;
+    if (engines.length === 0) {
+      toast({
+        title: "Search engine belum dipilih",
+        description: "Pilih minimal satu search engine.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setUpdating(true);
     try {
-      await updateSchedule(managedSchedule.id, pendingInterval, true);
+      const crawlEngineValue = engines
+        .map((engine) => engine.trim().toLowerCase())
+        .filter(Boolean)
+        .join(",");
+
+      await updateSchedule(
+        managedSchedule.id,
+        pendingInterval,
+        true,
+        crawlEngineValue || "google",
+      );
       await loadSchedules();
       setSelectedIntervalLocal(pendingInterval);
       setPendingInterval(null);
@@ -455,7 +477,9 @@ export default function AdminConsole() {
                   return (
                     <div className="space-y-4">
                       <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Status:</span>
+                        <span className="text-muted-foreground">
+                          Status Crawl:
+                        </span>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                             isRunning
@@ -570,8 +594,8 @@ export default function AdminConsole() {
           </DialogHeader>
           <div className="space-y-3">
             <p>
-              Yakin mau set jadwal crawl ke{" "}
-              <strong>{pendingInterval}</strong> dan mulai scheduler?
+              Yakin mau set jadwal crawl ke <strong>{pendingInterval}</strong>{" "}
+              dan mulai scheduler?
             </p>
             <div className="flex gap-2 justify-end">
               <Button
