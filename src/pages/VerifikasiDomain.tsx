@@ -30,6 +30,7 @@ import {
   buildExportUrl,
   fetchDomainDetail,
   fetchDomains,
+  runBulkInference,
   updateDomainStatus,
 } from "@/services/domainService";
 import {
@@ -136,8 +137,26 @@ export default function VerifikasiDomain() {
       setIsReasoningPending(false);
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setIsReasoningPending(false);
+
+    try {
+      const response = await runBulkInference({
+        domain_ids: pendingDomains.map((d) => d.id),
+        run_ocr: true,
+      });
+
+      console.log("Bulk inference result:", response);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      setRefreshTick((prev) => prev + 1);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Bulk inference gagal dijalankan",
+      );
+    } finally {
+      setIsReasoningPending(false);
+    }
   };
 
   const mapApiStatusToDomainStatus = (value?: string | null): DomainStatus => {

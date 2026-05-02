@@ -53,6 +53,20 @@ export interface UpdateDomainStatusPayload {
   verifier_name?: string;
 }
 
+export interface BulkInferencePayload {
+  domain_ids: string[];
+  tld_whitelist?: string;
+  run_ocr?: boolean;
+}
+
+export interface BulkInferenceResponse {
+  success: boolean;
+  processed: string[];
+  skipped: string[];
+  failed: string[];
+  reason: string;
+}
+
 export async function fetchDomains(params: {
   search?: string;
   status?: ApiDomainStatus;
@@ -87,6 +101,13 @@ export async function updateDomainStatus(
     method: "PATCH",
     body: JSON.stringify(payload),
   }) as Promise<{ success: boolean; message: string; updated_count: number }>;
+}
+
+export async function runBulkInference(payload: BulkInferencePayload) {
+  return apiClient(ENDPOINTS.INFERENCE_BULK, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }) as Promise<BulkInferenceResponse>;
 }
 
 export function buildExportUrl(params?: {

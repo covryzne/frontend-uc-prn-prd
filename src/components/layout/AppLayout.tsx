@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   CheckCircle,
@@ -12,7 +13,6 @@ import {
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const allMenuItems = [
@@ -48,6 +48,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCrawling, setIsCrawling] = useState(
+    localStorage.getItem("is_crawling") === "true",
+  );
+
+  // Monitor localStorage for crawling state changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setIsCrawling(localStorage.getItem("is_crawling") === "true");
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  // Check localStorage on component mount and periodically
+  useEffect(() => {
+    const checkCrawlingState = () => {
+      setIsCrawling(localStorage.getItem("is_crawling") === "true");
+    };
+
+    checkCrawlingState();
+    const interval = setInterval(checkCrawlingState, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = allMenuItems.filter((m) => !m.adminOnly || isAdmin);
   const activeLabel =
@@ -149,7 +173,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </Button>
             <h2 className="text-lg font-semibold">{activeLabel}</h2>
           </div>
-          {/* ...existing code... */}
+          {/* Crawling status indicator */}
+          {isCrawling && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <div className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400 animate-pulse" />
+              <span>Crawling in progress...</span>
+            </div>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
