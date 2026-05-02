@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,32 +18,35 @@ import {
 } from "@/components/ui/dialog";
 import { Pagination } from "@/components/shared/Pagination";
 import {
-  defaultWhitelist,
   defaultSearchEngines,
   searchEngineOptions,
-  crawlScheduleOptions,
 } from "@/data/mockData";
 import type { KeywordItem } from "@/types";
-import { X, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
-import {
-  startCrawl as startCrawlAPI,
-  cancelCrawl as cancelCrawlAPI,
-} from "@/services/crawlService";
+import { X, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   fetchKeywords,
   createKeyword,
   updateKeyword,
   deleteKeyword,
 } from "@/services/keywordService";
+import {
+  fetchWhitelistDomains,
+  createWhitelistDomain,
+  deleteWhitelistDomain,
+} from "@/services/whitelistService";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getSchedules,
+  type ScheduleItem,
+  updateSchedule,
+  stopSchedule as stopScheduleAPI,
+} from "@/services/scheduleService";
 
 export default function AdminConsole() {
   const { toast } = useToast();
-  const crawlingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [engines, setEngines] = useState(defaultSearchEngines);
-  const [whitelist, setWhitelist] = useState(defaultWhitelist);
+  const [whitelist, setWhitelist] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState("");
-  const [schedule, setSchedule] = useState("Setiap 30 menit");
   const [keywords, setKeywords] = useState<KeywordItem[]>([]);
   const [kwPage, setKwPage] = useState(1);
   const [kwPerPage, setKwPerPage] = useState(10);
@@ -54,23 +57,99 @@ export default function AdminConsole() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [keywordToDelete, setKeywordToDelete] = useState<string | null>(null);
-  const [isCrawling, setIsCrawling] = useState(
-    localStorage.getItem("is_crawling") === "true",
-  );
   const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
+  const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
+  const [isUpdatingWhitelist, setIsUpdatingWhitelist] = useState(false);
 
   // Fetch keywords on component mount
   useEffect(() => {
     loadKeywords();
+    loadWhitelist();
   }, []);
 
+  // schedules for admin console
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+
+  const loadSchedules = async () => {
+    setSchedulesLoading(true);
+    try {
+      const data = await getSchedules();
+      setSchedules(data);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Gagal memuat jadwal", variant: "destructive" });
+    } finally {
+      setSchedulesLoading(false);
+    }
+  };
+
   useEffect(() => {
-    return () => {
-      if (crawlingTimeoutRef.current) {
-        clearTimeout(crawlingTimeoutRef.current);
-      }
-    };
+    loadSchedules();
   }, []);
+
+  const managedSchedule =
+    schedules && schedules.length > 0 ? schedules[0] : null;
+  const isCrawling = Boolean(managedSchedule?.is_running);
+
+  const [selectedIntervalLocal, setSelectedIntervalLocal] = useState<
+    string | undefined
+  >(undefined);
+  const [pendingInterval, setPendingInterval] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (managedSchedule) {
+      setSelectedIntervalLocal(managedSchedule.interval || "1h");
+    }
+  }, [managedSchedule]);
+
+  const scheduleOptions = [
+    { label: "Setiap 30 menit", value: "30m" },
+    { label: "Setiap 1 jam", value: "1h" },
+    { label: "Setiap 2 jam", value: "2h" },
+    { label: "Setiap 4 jam", value: "4h" },
+    { label: "Setiap 8 jam", value: "8h" },
+    { label: "Setiap 10 jam", value: "10h" },
+    { label: "Setiap 12 jam", value: "12h" },
+  ];
+
+  const onSelectChange = (val: string) => {
+    if (!managedSchedule || val === selectedIntervalLocal) return;
+    setPendingInterval(val);
+    setConfirmOpen(true);
+  };
+
+  const onConfirmChange = async () => {
+    if (!managedSchedule || !pendingInterval) return;
+    setUpdating(true);
+    try {
+      await updateSchedule(managedSchedule.id, pendingInterval, true);
+      await loadSchedules();
+      setSelectedIntervalLocal(pendingInterval);
+      setPendingInterval(null);
+      toast({ title: "Schedule updated and started" });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Gagal memperbarui schedule", variant: "destructive" });
+    } finally {
+      setUpdating(false);
+      setConfirmOpen(false);
+    }
+  };
+
+  const onStopSchedule = async () => {
+    if (!managedSchedule) return;
+    try {
+      await stopScheduleAPI(managedSchedule.id);
+      await loadSchedules();
+      toast({ title: "Schedule stopped" });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Gagal menghentikan schedule", variant: "destructive" });
+    }
+  };
 
   const loadKeywords = async () => {
     try {
@@ -107,21 +186,94 @@ export default function AdminConsole() {
     );
   };
 
-  const addWhitelist = () => {
-    if (newDomain && !whitelist.includes(newDomain)) {
-      setWhitelist([...whitelist, newDomain]);
-      setNewDomain("");
+  const normalizeWhitelistInput = (raw: string) => {
+    let domain = raw.trim().toLowerCase();
+    if (!domain) return "";
+    domain = domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+    if (domain.includes("/")) {
+      domain = domain.split("/", 1)[0];
+    }
+    if (!domain.startsWith(".")) {
+      domain = `.${domain}`;
+    }
+    return domain;
+  };
+
+  const loadWhitelist = async () => {
+    try {
+      setIsLoadingWhitelist(true);
+      const domains = await fetchWhitelistDomains();
+      setWhitelist(domains);
+    } catch (error) {
+      console.error("Failed to fetch whitelist:", error);
+      setWhitelist([]);
+      toast({
+        title: "Gagal memuat whitelist",
+        description: "Data whitelist tidak tersedia dari server.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingWhitelist(false);
     }
   };
 
-  const clearCrawlingState = () => {
-    if (crawlingTimeoutRef.current) {
-      clearTimeout(crawlingTimeoutRef.current);
-      crawlingTimeoutRef.current = null;
+  const addWhitelistAsync = async () => {
+    const normalized = normalizeWhitelistInput(newDomain);
+    if (!normalized) return;
+    if (whitelist.includes(normalized)) {
+      toast({
+        title: "Domain sudah ada",
+        description: normalized,
+      });
+      return;
     }
 
-    localStorage.removeItem("is_crawling");
-    setIsCrawling(false);
+    try {
+      setIsUpdatingWhitelist(true);
+      await createWhitelistDomain(normalized);
+      await loadWhitelist();
+      setNewDomain("");
+      toast({
+        title: "Whitelist diperbarui",
+        description: `${normalized} ditambahkan ke database.`,
+      });
+    } catch (error) {
+      console.error("Failed to add whitelist:", error);
+      toast({
+        title: "Gagal menambah whitelist",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Domain whitelist tidak bisa disimpan.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingWhitelist(false);
+    }
+  };
+
+  const removeWhitelistAsync = async (domain: string) => {
+    try {
+      setIsUpdatingWhitelist(true);
+      await deleteWhitelistDomain(domain);
+      await loadWhitelist();
+      toast({
+        title: "Whitelist diperbarui",
+        description: `${domain} dihapus dari database.`,
+      });
+    } catch (error) {
+      console.error("Failed to delete whitelist:", error);
+      toast({
+        title: "Gagal menghapus whitelist",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Domain whitelist tidak bisa dihapus.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingWhitelist(false);
+    }
   };
 
   const addKeyword = async () => {
@@ -247,93 +399,6 @@ export default function AdminConsole() {
     }
   };
 
-  const startCrawl = async () => {
-    if (keywords.length === 0) {
-      toast({
-        title: "Keyword belum ada",
-        description: "Tambahkan minimal satu keyword sebelum memulai crawling.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (engines.length === 0) {
-      toast({
-        title: "Search engine belum dipilih",
-        description: "Pilih minimal satu search engine sebelum crawling.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setKwModalOpen(false);
-      setEditModalOpen(false);
-      setDeleteConfirmOpen(false);
-
-      const crawlEngine = engines[0].toLowerCase();
-      const keywordStrings = keywords.map((k) => k.keyword);
-      const tldWhitelistStr = whitelist.join(";");
-
-      await startCrawlAPI({
-        keywords: keywordStrings,
-        crawl_engine: crawlEngine,
-        ai_reasoning: true,
-        tld_whitelist: tldWhitelistStr,
-      });
-
-      // Set persistent crawling state in localStorage
-      localStorage.setItem("is_crawling", "true");
-      setIsCrawling(true);
-
-      // Auto-reset after 60 seconds (optional indicator)
-      if (crawlingTimeoutRef.current) {
-        clearTimeout(crawlingTimeoutRef.current);
-      }
-
-      crawlingTimeoutRef.current = setTimeout(() => {
-        clearCrawlingState();
-      }, 60000);
-
-      toast({
-        title: "Crawling dimulai",
-        description: "Keyword sudah dikirim ke backend untuk diproses.",
-      });
-    } catch (error) {
-      console.error("Crawl error:", error);
-      toast({
-        title: "Gagal memulai crawling",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Request crawling gagal dijalankan.",
-        variant: "destructive",
-      });
-      // Don't reset state on error - let user see the error persists
-    }
-  };
-
-  const cancelCrawling = async () => {
-    try {
-      await cancelCrawlAPI();
-      clearCrawlingState();
-      toast({
-        title: "Crawling dibatalkan",
-        description: "Backend sudah menerima request cancel.",
-      });
-    } catch (error) {
-      console.error("Cancel crawl error:", error);
-      toast({
-        title: "Gagal membatalkan crawling",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Request cancel tidak berhasil dijalankan.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const paginatedKw = keywords.slice(
     (kwPage - 1) * kwPerPage,
     kwPage * kwPerPage,
@@ -363,68 +428,169 @@ export default function AdminConsole() {
         </CardContent>
       </Card>
 
-      {/* Whitelist */}
-      <Card className="w-full sm:flex-1">
-        <CardContent className="p-5 space-y-3">
-          <Label className="text-sm font-semibold">Whitelist Domain</Label>
-          <p className="text-xs text-muted-foreground">
-            Domain yang masuk whitelist akan otomatis dikategorikan
-            Non-Pornografi
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {whitelist.map((d) => (
-              <span
-                key={d}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-xs font-medium"
-              >
-                {d}
-                <button
-                  onClick={() =>
-                    setWhitelist((prev) => prev.filter((x) => x !== d))
-                  }
-                  className="hover:text-destructive"
+      <Card className="w-full">
+        <CardContent className="p-5">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-4 lg:pr-4">
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold">Jadwal Crawl</Label>
+                <p className="text-xs text-muted-foreground">
+                  Pilih interval untuk memulai crawl otomatis.
+                </p>
+              </div>
+
+              {schedulesLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading schedules...
+                </div>
+              ) : schedules.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No scheduler configured. Please create a schedule in the
+                  backend.
+                </div>
+              ) : (
+                (() => {
+                  const s = schedules[0];
+                  const isRunning = s.status === "running";
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            isRunning
+                              ? "bg-green-100 text-green-800"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {isRunning ? "Sedang berjalan" : "Berhenti"}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">
+                          Pilih jadwal crawl
+                        </div>
+                        <Select
+                          value={selectedIntervalLocal}
+                          onValueChange={onSelectChange}
+                        >
+                          <SelectTrigger className="w-full max-w-md">
+                            <SelectValue placeholder="Pilih interval crawl" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {scheduleOptions.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {isRunning && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={onStopSchedule}
+                        >
+                          Stop Schedule
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            <div className="space-y-3 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold">
+                  Whitelist Domain
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Kelola domain aman yang otomatis dikategorikan Non-Pornografi.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {isLoadingWhitelist ? (
+                  <span className="text-xs text-muted-foreground">
+                    Loading whitelist...
+                  </span>
+                ) : (
+                  whitelist.map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-xs font-medium"
+                    >
+                      {d}
+                      <button
+                        onClick={() => removeWhitelistAsync(d)}
+                        className="hover:text-destructive disabled:opacity-50"
+                        disabled={isUpdatingWhitelist}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Tambah Domain Whitelist"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  className="max-w-md"
+                  onKeyDown={(e) => e.key === "Enter" && addWhitelistAsync()}
+                  disabled={isUpdatingWhitelist}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addWhitelistAsync}
+                  disabled={isUpdatingWhitelist}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Tambah Domain Whitelist"
-              value={newDomain}
-              onChange={(e) => setNewDomain(e.target.value)}
-              className="max-w-xs"
-              onKeyDown={(e) => e.key === "Enter" && addWhitelist()}
-            />
-            <Button variant="outline" size="sm" onClick={addWhitelist}>
-              <Plus className="h-4 w-4" />
-            </Button>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Crawl Schedule */}
-      {/* <Card className="w-full sm:flex-1">
-        <CardContent className="p-5 space-y-3">
-          <Label className="text-sm font-semibold">Jadwal Crawl Otomatis</Label>
-          <Select value={schedule} onValueChange={setSchedule}>
-            <SelectTrigger className="max-w-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {crawlScheduleOptions.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {o}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Keyword akan di-crawl secara otomatis sesuai jadwal yang dipilih
-          </p>
-        </CardContent>
-      </Card> */}
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open);
+          if (!open) setPendingInterval(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Jadwal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p>
+              Yakin mau set jadwal crawl ke{" "}
+              <strong>{pendingInterval}</strong> dan mulai scheduler?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  setPendingInterval(null);
+                }}
+                disabled={updating}
+              >
+                Batal
+              </Button>
+              <Button onClick={onConfirmChange} disabled={updating}>
+                {updating ? "Updating..." : "Ya, mulai"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Keywords */}
       <Card className="w-full sm:flex-1">
@@ -441,28 +607,13 @@ export default function AdminConsole() {
               >
                 Add Keyword
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={startCrawl}
-                disabled={isCrawling}
-              >
-                {isCrawling ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Memulai Crawling...
-                  </>
-                ) : (
-                  "Start Crawl"
-                )}
-              </Button>
-              {isCrawling && (
+              {managedSchedule && managedSchedule.status === "running" && (
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={cancelCrawling}
+                  onClick={onStopSchedule}
                 >
-                  Cancel Crawling
+                  Stop Schedule
                 </Button>
               )}
             </div>
