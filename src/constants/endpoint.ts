@@ -13,6 +13,10 @@ const ENDPOINTS = {
     `${APP_BASE_URL_API}/api/data/domains/${domainId}`,
   DATA_DOMAIN_STATUS: (domainId: string) =>
     `${APP_BASE_URL_API}/api/data/domains/${domainId}/status`,
+  DATA_SERVICE_HEALTH: (serviceId: string) =>
+    `${APP_BASE_URL_API}/api/data/services/${serviceId}/health`,
+  DATA_SERVICE_LOGS: (serviceId: string, tail: number) =>
+    `${APP_BASE_URL_API}/api/data/services/${serviceId}/logs?tail=${tail}`,
   INFERENCE_BULK: `${APP_BASE_URL_API}/api/inference/inference-bulk`,
   DATA_EXPORT_PORNO_CSV: `${APP_BASE_URL_API}/api/data/export-result/csv`,
   SCRAPE_START_CRAWL: `${APP_BASE_URL_API}/scrape/start-multi-crawling`,

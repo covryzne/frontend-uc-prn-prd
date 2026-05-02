@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,39 +11,117 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Pagination } from "@/components/shared/Pagination";
-import { mockServiceStatus, mockLogs } from "@/data/mockData";
-import type { ServiceStatus } from "@/types";
+import type { LogItem, ServiceStatus } from "@/types";
 import { RefreshCw, Server, CheckSquare } from "lucide-react";
+import {
+  fetchServiceHealth,
+  fetchServiceLogs,
+  type ServiceId,
+} from "@/services/logService";
+import { useToast } from "@/hooks/use-toast";
+
+const SERVICE_DEFS: Array<{ id: ServiceId; nama: string }> = [
+  { id: "crawler", nama: "Crawler" },
+  { id: "reasoning-ai", nama: "Reasoning AI" },
+  { id: "sft-hukum", nama: "SFT Hukum" },
+  { id: "computer-vision", nama: "Computer Vision" },
+];
 
 export default function LogServis() {
-  const [services, setServices] = useState<ServiceStatus[]>(mockServiceStatus);
+  const { toast } = useToast();
+  const [services, setServices] = useState<ServiceStatus[]>(
+    SERVICE_DEFS.map((s) => ({
+      nama: s.nama,
+      status: "Unknown",
+      last_check: null,
+    })),
+  );
+  const [logs, setLogs] = useState<LogItem[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua Status");
   const [servisFilter, setServisFilter] = useState("Semua Servis");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
-  const healthCheck = (nama?: string) => {
-    setServices((prev) =>
-      prev.map((s) => {
-        if (nama && s.nama !== nama) return s;
-        const statuses: ServiceStatus["status"][] = [
-          "Online",
-          "Offline",
-          "Error",
-        ];
-        return {
-          ...s,
-          status: statuses[
-            Math.floor(Math.random() * 2)
-          ] as ServiceStatus["status"],
-          last_check: new Date().toISOString(),
-        };
-      }),
-    );
+  const mapHealthStatus = (status: string): ServiceStatus["status"] => {
+    if (status === "ok") return "Online";
+    if (status === "error") return "Error";
+    return "Unknown";
   };
 
-  const filteredLogs = mockLogs.filter((l) => {
+  const refreshServiceHealth = useCallback(async (targetNama?: string) => {
+    try {
+      setIsLoadingServices(true);
+      const targets = SERVICE_DEFS.filter(
+        (s) => !targetNama || s.nama === targetNama,
+      );
+      const healthResults = await Promise.all(
+        targets.map((s) => fetchServiceHealth(s.id)),
+      );
+
+      const byName = new Map<string, ServiceStatus>();
+      healthResults.forEach((res) => {
+        const def = SERVICE_DEFS.find((s) => s.id === res.service_id);
+        if (!def) return;
+        byName.set(def.nama, {
+          nama: def.nama,
+          status: mapHealthStatus(res.status),
+          last_check: new Date().toISOString(),
+        });
+      });
+
+      setServices((prev) =>
+        prev.map((s) => {
+          const updated = byName.get(s.nama);
+          return updated ?? s;
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to check service health:", error);
+      toast({
+        title: "Gagal melakukan health check",
+        description:
+          error instanceof Error ? error.message : "Tidak bisa cek service.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingServices(false);
+    }
+  }, [toast]);
+
+  const refreshLogs = useCallback(async () => {
+    try {
+      setIsLoadingLogs(true);
+      const responses = await Promise.all(
+        SERVICE_DEFS.map((s) => fetchServiceLogs(s.id, 100)),
+      );
+      const merged = responses.flatMap((res) => res.logs || []);
+      merged.sort(
+        (a, b) =>
+          new Date(b.waktu).getTime() - new Date(a.waktu).getTime(),
+      );
+      setLogs(merged);
+    } catch (error) {
+      console.error("Failed to load service logs:", error);
+      toast({
+        title: "Gagal memuat log servis",
+        description:
+          error instanceof Error ? error.message : "Tidak bisa mengambil log.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    refreshServiceHealth();
+    refreshLogs();
+  }, [refreshLogs, refreshServiceHealth]);
+
+  const filteredLogs = useMemo(() => logs.filter((l) => {
     if (search && !l.detail.toLowerCase().includes(search.toLowerCase()))
       return false;
     if (statusFilter !== "Semua Status" && l.status !== statusFilter)
@@ -51,7 +129,7 @@ export default function LogServis() {
     if (servisFilter !== "Semua Servis" && l.servis !== servisFilter)
       return false;
     return true;
-  });
+  }), [logs, search, statusFilter, servisFilter]);
 
   const totalLogs = filteredLogs.length;
   const paginatedLogs = filteredLogs.slice(
@@ -71,8 +149,12 @@ export default function LogServis() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => healthCheck()}
+            onClick={() => {
+              refreshServiceHealth();
+              refreshLogs();
+            }}
             className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+            disabled={isLoadingServices || isLoadingLogs}
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Health Check Semua
@@ -98,7 +180,8 @@ export default function LogServis() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-xs"
-                  onClick={() => healthCheck(s.nama)}
+                  onClick={() => refreshServiceHealth(s.nama)}
+                  disabled={isLoadingServices}
                 >
                   <CheckSquare className="h-3 w-3 mr-1" />
                   Check
@@ -151,13 +234,7 @@ export default function LogServis() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[
-                "Semua Servis",
-                "Crawler",
-                "Reasoning AI",
-                "SFT Hukum",
-                "Computer Vision",
-              ].map((s) => (
+              {["Semua Servis", ...SERVICE_DEFS.map((s) => s.nama)].map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>
@@ -187,7 +264,25 @@ export default function LogServis() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedLogs.map((l, i) => (
+                  {isLoadingLogs ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="p-4 text-center text-muted-foreground"
+                      >
+                        Loading logs...
+                      </td>
+                    </tr>
+                  ) : paginatedLogs.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="p-4 text-center text-muted-foreground"
+                      >
+                        Belum ada log yang cocok dengan filter.
+                      </td>
+                    </tr>
+                  ) : paginatedLogs.map((l, i) => (
                     <tr
                       key={i}
                       className="border-b last:border-0 hover:bg-muted/30 transition-colors"

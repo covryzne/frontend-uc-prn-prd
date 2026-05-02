@@ -45,6 +45,12 @@ export default function AdminConsole() {
   const [whitelist, setWhitelist] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState("");
   const [keywords, setKeywords] = useState<KeywordItem[]>([]);
+  const [queueSummary, setQueueSummary] = useState<{
+    pending: number;
+    processing: number;
+    done: number;
+    failed: number;
+  } | null>(null);
   const [kwPage, setKwPage] = useState(1);
   const [kwPerPage, setKwPerPage] = useState(10);
   const [kwModalOpen, setKwModalOpen] = useState(false);
@@ -86,7 +92,8 @@ export default function AdminConsole() {
   }, []);
 
   const managedSchedule =
-    schedules && schedules.length > 0 ? schedules[0] : null;
+    schedules.find((item) => (item.status || "").toLowerCase() === "running") ||
+    (schedules.length > 0 ? schedules[0] : null);
   const isCrawling = Boolean(managedSchedule?.is_running);
 
   const [selectedIntervalLocal, setSelectedIntervalLocal] = useState<
@@ -186,6 +193,14 @@ export default function AdminConsole() {
           }),
         );
         setKeywords(formattedKeywords);
+        setQueueSummary(
+          response.queue_summary ?? {
+            pending: 0,
+            processing: 0,
+            done: 0,
+            failed: 0,
+          },
+        );
       }
     } catch (error) {
       console.error("Failed to fetch keywords:", error);
@@ -299,15 +314,6 @@ export default function AdminConsole() {
   };
 
   const addKeyword = async () => {
-    if (isCrawling) {
-      toast({
-        title: "Crawling sedang berjalan",
-        description: "Keyword baru akan berlaku untuk crawl berikutnya.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (newKeyword.trim()) {
       try {
         await createKeyword(newKeyword.trim());
@@ -316,7 +322,9 @@ export default function AdminConsole() {
         setKwModalOpen(false);
         toast({
           title: "Keyword berhasil ditambahkan",
-          description: newKeyword.trim(),
+          description: isCrawling
+            ? "Keyword akan diantrikan untuk crawl berikutnya."
+            : newKeyword.trim(),
         });
       } catch (error) {
         console.error("Failed to add keyword:", error);
@@ -335,8 +343,8 @@ export default function AdminConsole() {
   const openEditModal = (keyword: KeywordItem) => {
     if (isCrawling) {
       toast({
-        title: "Crawling sedang berjalan",
-        description: "Edit keyword akan berlaku untuk crawl berikutnya.",
+        title: "Keyword sudah dalam proses crawl",
+        description: "Tidak bisa diedit saat crawling sedang berjalan.",
         variant: "destructive",
       });
       return;
@@ -348,15 +356,6 @@ export default function AdminConsole() {
   };
 
   const saveEditKeyword = async () => {
-    if (isCrawling) {
-      toast({
-        title: "Crawling sedang berjalan",
-        description: "Perubahan keyword akan berlaku untuk crawl berikutnya.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (editingKeywordId && editingKeywordText.trim()) {
       try {
         await updateKeyword(editingKeywordId, editingKeywordText.trim());
@@ -383,15 +382,6 @@ export default function AdminConsole() {
   };
 
   const openDeleteConfirm = (keywordId: string) => {
-    if (isCrawling) {
-      toast({
-        title: "Crawling sedang berjalan",
-        description: "Hapus keyword akan berlaku untuk crawl berikutnya.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setKeywordToDelete(keywordId);
     setDeleteConfirmOpen(true);
   };
@@ -432,20 +422,33 @@ export default function AdminConsole() {
       <Card className="w-full sm:flex-1">
         <CardContent className="p-5 space-y-3">
           <Label className="text-sm font-semibold">Search Engine</Label>
-          <div className="flex flex-wrap gap-2">
-            {searchEngineOptions.map((e) => (
-              <button
-                key={e}
-                onClick={() => toggleEngine(e)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                  engines.includes(e)
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-foreground border-border hover:bg-muted"
-                }`}
-              >
-                {e}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1">
+            {/* {queueSummary ? (
+              <p className="text-sm text-muted-foreground">
+                {queueSummary.processing > 0
+                  ? `Processing ${queueSummary.processing} keyword${
+                      queueSummary.processing === 1 ? "" : "s"
+                    }...`
+                  : `Queue: ${queueSummary.pending} item${
+                      queueSummary.pending === 1 ? "" : "s"
+                    }`}
+              </p>
+            ) : null} */}
+            <div className="flex flex-wrap gap-2">
+              {searchEngineOptions.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => toggleEngine(e)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    engines.includes(e)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -472,7 +475,8 @@ export default function AdminConsole() {
                 </div>
               ) : (
                 (() => {
-                  const s = schedules[0];
+                  const s = managedSchedule;
+                  if (!s) return null;
                   const isRunning = s.status === "running";
                   return (
                     <div className="space-y-4">
@@ -624,22 +628,9 @@ export default function AdminConsole() {
               Daftar Keyword ({keywords.length.toLocaleString("id-ID")})
             </Label>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => setKwModalOpen(true)}
-                disabled={isCrawling}
-              >
+              <Button size="sm" onClick={() => setKwModalOpen(true)}>
                 Add Keyword
               </Button>
-              {managedSchedule && managedSchedule.status === "running" && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={onStopSchedule}
-                >
-                  Stop Schedule
-                </Button>
-              )}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -692,7 +683,6 @@ export default function AdminConsole() {
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => openEditModal(k)}
-                          disabled={isCrawling}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -701,7 +691,6 @@ export default function AdminConsole() {
                           size="icon"
                           className="h-7 w-7 text-destructive"
                           onClick={() => openDeleteConfirm(k.id || "")}
-                          disabled={isCrawling}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -736,13 +725,8 @@ export default function AdminConsole() {
               onChange={(e) => setNewKeyword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addKeyword()}
               autoFocus
-              disabled={isCrawling}
             />
-            <Button
-              className="w-full"
-              onClick={addKeyword}
-              disabled={isCrawling}
-            >
+            <Button className="w-full" onClick={addKeyword}>
               Simpan
             </Button>
           </div>

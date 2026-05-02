@@ -6,6 +6,13 @@ export interface KeywordResponse {
   keyword: string;
 }
 
+export interface QueueSummary {
+  pending: number;
+  processing: number;
+  done: number;
+  failed: number;
+}
+
 export interface KeywordListResponse {
   success: boolean;
   data: KeywordResponse[];
@@ -15,6 +22,7 @@ export interface KeywordListResponse {
   total_pages: number;
   schedule?: string;
   crawl_engine?: string;
+  queue_summary?: QueueSummary;
 }
 
 export interface DeleteKeywordResponse {
