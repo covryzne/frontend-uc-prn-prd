@@ -277,7 +277,6 @@ export default function LogServis() {
                     <th className="p-3 font-medium text-muted-foreground">
                       Status
                     </th>
-                    
                   </tr>
                 </thead>
                 <tbody>
@@ -307,14 +306,14 @@ export default function LogServis() {
                       >
                         <td className="p-3 text-xs text-muted-foreground font-mono-code whitespace-nowrap">
                           {new Date(l.waktu).toLocaleString("id-ID", {
-                              timeZone: "Asia/Jakarta",
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
+                            timeZone: "Asia/Jakarta",
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
                         </td>
                         <td className="p-3 text-xs font-medium">{l.servis}</td>
                         <td className="p-3">
