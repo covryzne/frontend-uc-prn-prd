@@ -12,10 +12,12 @@ export interface ServiceHealthApiResponse {
   success: boolean;
   service_id: string;
   status: "ok" | "error" | "unknown";
+  activity_state?: "crawling" | "idle" | "stopped"; // For crawler service
   response_time_ms?: number | null;
   health_url?: string | null;
   http_status?: number;
   message?: string;
+  detail?: any;
 }
 
 export interface ServiceLogsApiResponse {
@@ -33,9 +35,11 @@ export async function fetchServiceHealth(serviceId: ServiceId) {
   }) as Promise<ServiceHealthApiResponse>;
 }
 
-export async function fetchServiceLogs(serviceId: ServiceId, tail: number = 50) {
+export async function fetchServiceLogs(
+  serviceId: ServiceId,
+  tail: number = 50,
+) {
   return apiClient(ENDPOINTS.DATA_SERVICE_LOGS(serviceId, tail), {
     method: "GET",
   }) as Promise<ServiceLogsApiResponse>;
 }
-
