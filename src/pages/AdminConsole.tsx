@@ -20,6 +20,7 @@ import { Pagination } from "@/components/shared/Pagination";
 import { defaultSearchEngines, searchEngineOptions } from "@/data/mockData";
 import type { KeywordItem } from "@/types";
 import { X, Plus, Pencil, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   fetchKeywords,
   createKeyword,
@@ -317,6 +318,12 @@ export default function AdminConsole() {
     if (newKeyword.trim()) {
       try {
         await createKeyword(newKeyword.trim());
+        // Optimistically update queue pending count so UI updates immediately
+        setQueueSummary((q) =>
+          q
+            ? { ...q, pending: (q.pending ?? 0) + 1 }
+            : { pending: 1, processing: 0, done: 0, failed: 0 },
+        );
         await loadKeywords();
         setNewKeyword("");
         setKwModalOpen(false);
@@ -359,6 +366,12 @@ export default function AdminConsole() {
     if (editingKeywordId && editingKeywordText.trim()) {
       try {
         await updateKeyword(editingKeywordId, editingKeywordText.trim());
+        // Edited keywords are re-queued as pending on the backend; update UI immediately
+        setQueueSummary((q) =>
+          q
+            ? { ...q, pending: (q.pending ?? 0) + 1 }
+            : { pending: 1, processing: 0, done: 0, failed: 0 },
+        );
         await loadKeywords();
         setEditModalOpen(false);
         setEditingKeywordId(null);
@@ -628,6 +641,9 @@ export default function AdminConsole() {
               Daftar Keyword ({keywords.length.toLocaleString("id-ID")})
             </Label>
             <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="mr-1">
+                Queue {queueSummary?.pending ?? 0}
+              </Badge>
               <Button size="sm" onClick={() => setKwModalOpen(true)}>
                 Add Keyword
               </Button>
