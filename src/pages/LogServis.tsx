@@ -22,9 +22,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const SERVICE_DEFS: Array<{ id: ServiceId; nama: string }> = [
   { id: "crawler", nama: "Crawler" },
-  { id: "reasoning-ai", nama: "Reasoning AI" },
-  { id: "sft-hukum", nama: "SFT Hukum" },
-  { id: "computer-vision", nama: "Computer Vision" },
+  // TODO: Enable other services when ready
+  // { id: "reasoning-ai", nama: "Reasoning AI" },
+  // { id: "sft-hukum", nama: "SFT Hukum" },
+  // { id: "computer-vision", nama: "Computer Vision" },
 ];
 
 export default function LogServis() {
@@ -45,51 +46,65 @@ export default function LogServis() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
-  const mapHealthStatus = (status: string): ServiceStatus["status"] => {
+  const mapHealthStatus = (
+    status: string,
+    activityState?: string,
+  ): ServiceStatus["status"] => {
+    // For crawler service, map activity_state to display status
+    if (activityState === "stopped") return "Offline"; // Scheduler stopped
+    if (activityState === "crawling") return "Online"; // Actively crawling
+    if (activityState === "idle") return "Online"; // Ready but idle
+
+    // For other services
     if (status === "ok") return "Online";
     if (status === "error") return "Error";
     return "Unknown";
   };
 
-  const refreshServiceHealth = useCallback(async (targetNama?: string) => {
-    try {
-      setIsLoadingServices(true);
-      const targets = SERVICE_DEFS.filter(
-        (s) => !targetNama || s.nama === targetNama,
-      );
-      const healthResults = await Promise.all(
-        targets.map((s) => fetchServiceHealth(s.id)),
-      );
+  const refreshServiceHealth = useCallback(
+    async (targetNama?: string) => {
+      try {
+        setIsLoadingServices(true);
+        const targets = SERVICE_DEFS.filter(
+          (s) => !targetNama || s.nama === targetNama,
+        );
+        const healthResults = await Promise.all(
+          targets.map((s) => fetchServiceHealth(s.id)),
+        );
 
-      const byName = new Map<string, ServiceStatus>();
-      healthResults.forEach((res) => {
-        const def = SERVICE_DEFS.find((s) => s.id === res.service_id);
-        if (!def) return;
-        byName.set(def.nama, {
-          nama: def.nama,
-          status: mapHealthStatus(res.status),
-          last_check: new Date().toISOString(),
+        const byName = new Map<string, ServiceStatus>();
+        healthResults.forEach((res) => {
+          const def = SERVICE_DEFS.find((s) => s.id === res.service_id);
+          if (!def) return;
+          byName.set(def.nama, {
+            nama: def.nama,
+            status: mapHealthStatus(res.status, res.activity_state),
+            last_check: new Date().toISOString(),
+            activity_state: res.activity_state,
+            message: res.message,
+          });
         });
-      });
 
-      setServices((prev) =>
-        prev.map((s) => {
-          const updated = byName.get(s.nama);
-          return updated ?? s;
-        }),
-      );
-    } catch (error) {
-      console.error("Failed to check service health:", error);
-      toast({
-        title: "Gagal melakukan health check",
-        description:
-          error instanceof Error ? error.message : "Tidak bisa cek service.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingServices(false);
-    }
-  }, [toast]);
+        setServices((prev) =>
+          prev.map((s) => {
+            const updated = byName.get(s.nama);
+            return updated ?? s;
+          }),
+        );
+      } catch (error) {
+        console.error("Failed to check service health:", error);
+        toast({
+          title: "Gagal melakukan health check",
+          description:
+            error instanceof Error ? error.message : "Tidak bisa cek service.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingServices(false);
+      }
+    },
+    [toast],
+  );
 
   const refreshLogs = useCallback(async () => {
     try {
@@ -99,8 +114,7 @@ export default function LogServis() {
       );
       const merged = responses.flatMap((res) => res.logs || []);
       merged.sort(
-        (a, b) =>
-          new Date(b.waktu).getTime() - new Date(a.waktu).getTime(),
+        (a, b) => new Date(b.waktu).getTime() - new Date(a.waktu).getTime(),
       );
       setLogs(merged);
     } catch (error) {
@@ -121,15 +135,19 @@ export default function LogServis() {
     refreshLogs();
   }, [refreshLogs, refreshServiceHealth]);
 
-  const filteredLogs = useMemo(() => logs.filter((l) => {
-    if (search && !l.detail.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    if (statusFilter !== "Semua Status" && l.status !== statusFilter)
-      return false;
-    if (servisFilter !== "Semua Servis" && l.servis !== servisFilter)
-      return false;
-    return true;
-  }), [logs, search, statusFilter, servisFilter]);
+  const filteredLogs = useMemo(
+    () =>
+      logs.filter((l) => {
+        if (search && !l.detail.toLowerCase().includes(search.toLowerCase()))
+          return false;
+        if (statusFilter !== "Semua Status" && l.status !== statusFilter)
+          return false;
+        if (servisFilter !== "Semua Servis" && l.servis !== servisFilter)
+          return false;
+        return true;
+      }),
+    [logs, search, statusFilter, servisFilter],
+  );
 
   const totalLogs = filteredLogs.length;
   const paginatedLogs = filteredLogs.slice(
@@ -172,9 +190,10 @@ export default function LogServis() {
                   <StatusBadge status={s.status} type="service" />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {s.last_check
-                    ? `Checked: ${new Date(s.last_check).toLocaleTimeString("id-ID")}`
-                    : "Belum dicek"}
+                  {s.message ||
+                    (s.last_check
+                      ? `Checked: ${new Date(s.last_check).toLocaleTimeString("id-ID")}`
+                      : "Belum dicek")}
                 </p>
                 <Button
                   variant="ghost"
@@ -258,16 +277,13 @@ export default function LogServis() {
                     <th className="p-3 font-medium text-muted-foreground">
                       Status
                     </th>
-                    <th className="p-3 font-medium text-muted-foreground">
-                      Detail
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoadingLogs ? (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={3}
                         className="p-4 text-center text-muted-foreground"
                       >
                         Loading logs...
@@ -276,36 +292,39 @@ export default function LogServis() {
                   ) : paginatedLogs.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={3}
                         className="p-4 text-center text-muted-foreground"
                       >
                         Belum ada log yang cocok dengan filter.
                       </td>
                     </tr>
-                  ) : paginatedLogs.map((l, i) => (
-                    <tr
-                      key={i}
-                      className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="p-3 text-xs text-muted-foreground font-mono-code whitespace-nowrap">
-                        {new Date(l.waktu).toLocaleString("id-ID", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </td>
-                      <td className="p-3 text-xs font-medium">{l.servis}</td>
-                      <td className="p-3">
-                        <StatusBadge status={l.status} type="log" />
-                      </td>
-                      <td className="p-3 text-xs text-muted-foreground max-w-[300px] truncate">
-                        {l.detail}
-                      </td>
-                    </tr>
-                  ))}
+                  ) : (
+                    paginatedLogs.map((l, i) => (
+                      <tr
+                        key={i}
+                        className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="p-3 text-xs text-muted-foreground font-mono-code whitespace-nowrap">
+                          {new Date(l.waktu).toLocaleString("id-ID", {
+                            timeZone: "Asia/Jakarta",
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </td>
+                        <td className="p-3 text-xs font-medium">{l.servis}</td>
+                        <td className="p-3">
+                          <StatusBadge status={l.status} type="log" />
+                        </td>
+                        {/* <td className="p-3 text-xs text-muted-foreground max-w-[300px] truncate">
+                          {l.detail}
+                        </td> */}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

@@ -674,73 +674,53 @@ export const mockDomainDetail: DomainDetail =
   mockDomainDetailsByDomain["qaaohmo.xyz"];
 
 export const mockServiceStatus: ServiceStatus[] = [
-  { nama: "Crawler", status: "Unknown", last_check: null },
-  { nama: "Reasoning AI", status: "Unknown", last_check: null },
-  { nama: "SFT Hukum", status: "Unknown", last_check: null },
-  { nama: "Computer Vision", status: "Unknown", last_check: null },
+  { nama: "Crawler", status: "Online", last_check: null },
+  // TODO: Enable other services when ready
+  // { nama: "Reasoning AI", status: "Unknown", last_check: null },
+  // { nama: "SFT Hukum", status: "Unknown", last_check: null },
+  // { nama: "Computer Vision", status: "Unknown", last_check: null },
 ];
 
 export const mockLogs: LogItem[] = [
   {
-    waktu: "2026-03-19T20:27:24",
-    servis: "Reasoning AI",
-    status: "Error",
-    detail: "Resource not found",
-  },
-  {
-    waktu: "2026-03-19T20:07:28",
-    servis: "SFT Hukum",
-    status: "Ok",
-    detail: "Health check passed",
-  },
-  {
-    waktu: "2026-03-19T19:55:10",
+    waktu: "2026-05-03T05:06:08",
     servis: "Crawler",
     status: "Ok",
-    detail: "Crawl batch #4521 completed - 150 URLs processed",
+    detail: "Application startup complete - Server ready to receive requests",
   },
   {
-    waktu: "2026-03-19T19:30:45",
-    servis: "Computer Vision",
+    waktu: "2026-05-03T05:05:50",
+    servis: "Crawler",
+    status: "Ok",
+    detail:
+      "Starting Pengawasan-Ruang-Digital v1.0.0 - initialization in progress",
+  },
+  {
+    waktu: "2026-05-03T05:05:30",
+    servis: "Crawler",
     status: "Warning",
-    detail: "High memory usage detected (85%)",
+    detail: "Crawl scheduler batch result: No pending keywords to process",
   },
   {
-    waktu: "2026-03-19T19:15:00",
-    servis: "Reasoning AI",
-    status: "Ok",
-    detail: "Model inference batch completed - 50 domains analyzed",
-  },
-  {
-    waktu: "2026-03-19T18:45:30",
-    servis: "Crawler",
-    status: "Error",
-    detail: "Connection timeout to target domain",
-  },
-  {
-    waktu: "2026-03-19T18:30:00",
-    servis: "SFT Hukum",
-    status: "Ok",
-    detail: "Classification batch completed",
-  },
-  {
-    waktu: "2026-03-19T18:00:15",
-    servis: "Computer Vision",
-    status: "Ok",
-    detail: "ViT model loaded successfully",
-  },
-  {
-    waktu: "2026-03-19T17:45:00",
+    waktu: "2026-05-03T05:04:15",
     servis: "Crawler",
     status: "Ok",
-    detail: "Crawl batch #4520 completed - 200 URLs processed",
+    detail: "Crawl batch #4521 completed - 150 URLs processed successfully",
   },
   {
-    waktu: "2026-03-19T17:30:22",
-    servis: "Reasoning AI",
-    status: "Error",
-    detail: "GPU memory overflow - batch size reduced",
+    waktu: "2026-05-03T05:02:00",
+    servis: "Crawler",
+    status: "Warning",
+    detail: "High memory usage detected (82%) - monitoring in progress",
   },
+  {
+    waktu: "2026-05-03T04:58:45",
+    servis: "Crawler",
+    status: "Error",
+    detail:
+      "Connection timeout to target domain - retrying with fallback engine",
+  },
+  // TODO: Enable logs for other services when ready
 ];
 
 export const mockKeywords: KeywordItem[] = [

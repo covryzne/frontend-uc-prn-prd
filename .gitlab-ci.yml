@@ -1,0 +1,55 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  IMAGE: "$CI_REGISTRY_IMAGE"
+  IMAGE_TAG: "$CI_COMMIT_SHA"
+
+before_script:
+  - docker login -u gitlab-ci-token -p "$CI_JOB_TOKEN" "$CI_REGISTRY"
+
+build:
+  stage: build
+  image: docker:25.0.3
+  services:
+    - name: docker:25.0.3-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+  script:
+    - docker build -t "$IMAGE:$IMAGE_TAG" .
+    - docker push "$IMAGE:$IMAGE_TAG"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
+        docker tag "$IMAGE:$IMAGE_TAG" "$IMAGE:dev"
+        docker push "$IMAGE:dev"
+      fi
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "staging" ]; then
+        docker tag "$IMAGE:$IMAGE_TAG" "$IMAGE:staging"
+        docker push "$IMAGE:staging"
+      fi
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        docker tag "$IMAGE:$IMAGE_TAG" "$IMAGE:main"
+        docker push "$IMAGE:main"
+      fi
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy:
+  stage: deploy
+  image: docker:25.0.3
+  tags:
+    - prd-runner
+  script:
+    - export FRONTEND_IMAGE="$IMAGE:$IMAGE_TAG"
+    - cd /workspace/shared
+    - FRONTEND_IMAGE="$FRONTEND_IMAGE" docker-compose -f deploy/docker-compose.prod.yml pull frontend
+    - FRONTEND_IMAGE="$FRONTEND_IMAGE" docker-compose -f deploy/docker-compose.prod.yml up -d frontend
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_BRANCH == "main"'

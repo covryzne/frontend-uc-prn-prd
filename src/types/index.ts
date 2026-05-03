@@ -1,7 +1,7 @@
 export type UserRole = "Admin" | "Verifikator";
 
 export interface User {
-  id: string | number;
+  id: number;
   nama: string;
   email: string;
   role: UserRole;
@@ -47,7 +47,7 @@ export interface VerifikasiTerakhirItem {
 export type DomainStatus = "Pornografi" | "Non-Pornografi" | "Manual Check";
 
 export interface DomainItem {
-  id: string;
+  id: number;
   timestamp: string;
   domain: string;
   status: DomainStatus;
@@ -90,6 +90,8 @@ export interface ServiceStatus {
   nama: string;
   status: "Online" | "Offline" | "Unknown" | "Error";
   last_check: string | null;
+  activity_state?: "crawling" | "idle" | "stopped"; // For crawler service detail
+  message?: string; // Additional context message
 }
 
 export type LogStatus = "Ok" | "Error" | "Warning";
@@ -104,5 +106,5 @@ export interface LogItem {
 export interface KeywordItem {
   no: number;
   keyword: string;
-  id?: string;
+  id?: number;
 }
