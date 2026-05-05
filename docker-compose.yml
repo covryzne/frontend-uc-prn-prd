@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://backend:3000
+    container_name: frontend-mvp
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    networks:
+      - mvp-net
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+networks:
+  mvp-net:
+    external: true
