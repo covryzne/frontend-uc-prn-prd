@@ -348,15 +348,6 @@ export default function AdminConsole() {
   };
 
   const openEditModal = (keyword: KeywordItem) => {
-    if (isCrawling) {
-      toast({
-        title: "Keyword sudah dalam proses crawl",
-        description: "Tidak bisa diedit saat crawling sedang berjalan.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setEditingKeywordId(keyword.id || null);
     setEditingKeywordText(keyword.keyword);
     setEditModalOpen(true);
