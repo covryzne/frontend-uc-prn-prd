@@ -8,6 +8,8 @@ export interface DomainListItemApi {
   domain: string;
   url: string[];
   status: string[];
+  latestStatus?: string | null;
+  vitScore?: number | null;
   finalScore: number;
   screenshot: string[];
   verifiedBy: (string | null)[];
@@ -70,7 +72,7 @@ export interface BulkInferenceResponse {
 export async function fetchDomains(params: {
   search?: string;
   status?: ApiDomainStatus;
-  sort_by?: "timestamp" | "domain" | "score";
+  sort_by?: "timestamp" | "domain" | "score" | "vit_score";
   order?: "asc" | "desc";
   page?: number;
   limit?: number;

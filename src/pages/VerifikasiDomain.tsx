@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
+// Progress component removed: UI no longer displays score
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Pagination } from "@/components/shared/Pagination";
 import type {
@@ -77,7 +77,7 @@ export default function VerifikasiDomain() {
     detailPages.findIndex((page) => page.url === selectedDetailUrl),
   );
   const activeScreenshot = detailData?.screenshots?.[0];
-  type SortField = "timestamp" | "domain" | "score";
+  type SortField = "timestamp" | "domain" | "vit_score";
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -252,8 +252,12 @@ export default function VerifikasiDomain() {
           id: item.id,
           domain: item.domain,
           timestamp: item.timestamp?.[0] ?? new Date().toISOString(),
-          status: mapApiStatusToDomainStatus(item.status?.[0]),
+          // Prefer explicit latestStatus from server, fall back to first status in array
+          status: mapApiStatusToDomainStatus(
+            item.latestStatus ?? item.status?.[0],
+          ),
           score: normalizeScore(item.finalScore),
+          vitScore: normalizeScore(item.vitScore ?? item.finalScore),
           screenshot: item.screenshot?.[0] ?? null,
           verifikator: item.verifiedBy?.[0] ?? null,
           urlCount: item.url_count,
@@ -466,11 +470,11 @@ export default function VerifikasiDomain() {
                   </th>
                   <th
                     className="p-3 font-medium text-muted-foreground cursor-pointer select-none"
-                    onClick={() => handleSort("score")}
+                    onClick={() => handleSort("vit_score")}
                   >
-                    <span>Score</span>
+                    <span>VIT Score</span>
                     <span className="ml-1 text-xs">
-                      {renderSortIndicator("score")}
+                      {renderSortIndicator("vit_score")}
                     </span>
                   </th>
                   <th className="p-3 font-medium text-muted-foreground">
@@ -531,13 +535,10 @@ export default function VerifikasiDomain() {
                       <td className="p-3">
                         <StatusBadge status={d.status} />
                       </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Progress value={d.score} className="w-16 h-1.5" />
-                          <span className="text-xs tabular-nums">
-                            {d.score}%
-                          </span>
-                        </div>
+                      <td className="p-3 text-xs font-medium">
+                        {typeof d.vitScore === "number"
+                          ? `${d.vitScore.toFixed(1)}%`
+                          : "—"}
                       </td>
                       <td className="p-3">
                         <div className="space-y-1">
@@ -667,20 +668,7 @@ export default function VerifikasiDomain() {
           <div className="space-y-5">
             {/* AI Analysis */}
 
-            <div className="space-y-3">
-              <div>
-                <h4 className="text-sm font-semibold">Confidence Score</h4>
-                <div className="mt-1 flex items-center gap-2">
-                  <Progress
-                    value={detailData?.confidence_score ?? 0}
-                    className="flex-1 h-2"
-                  />
-                  <span className="text-sm font-semibold tabular-nums">
-                    {detailData?.confidence_score ?? 0}%
-                  </span>
-                </div>
-              </div>
-            </div>
+            {/* Confidence/score removed from modal - only classification shown */}
 
             {/* <div className="space-y-3">
               <h4 className="text-sm font-semibold">AI Reasoning</h4>
@@ -721,16 +709,12 @@ export default function VerifikasiDomain() {
                   </span>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-1 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground">Waktu Crawl:</span>{" "}
                   {detailData?.crawled_at
                     ? new Date(detailData.crawled_at).toLocaleString("id-ID")
                     : "-"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">ViT Score:</span>{" "}
-                  {detailData?.vit_score ?? 0}%
                 </div>
               </div>
             </div>
