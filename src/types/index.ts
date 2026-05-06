@@ -47,11 +47,12 @@ export interface VerifikasiTerakhirItem {
 export type DomainStatus = "Pornografi" | "Non-Pornografi" | "Manual Check";
 
 export interface DomainItem {
-  id: number;
+  id: string;
   timestamp: string;
   domain: string;
   status: DomainStatus;
   score: number;
+  vitScore?: number;
   screenshot: string | null;
   verifikator: string | null;
   urlCount?: number;
@@ -106,5 +107,5 @@ export interface LogItem {
 export interface KeywordItem {
   no: number;
   keyword: string;
-  id?: number;
+  id?: string;
 }
