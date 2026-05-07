@@ -279,8 +279,21 @@ export default function Dashboard() {
   const [trendFilter, setTrendFilter] = useState("Domain");
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const selectedTrend =
     trendFilter === "URL" ? (data?.trendUrl ?? []) : (data?.trend ?? []);
+
+  // Debug: log when filter or data changes to help diagnose URL vs Domain trend
+  useEffect(() => {
+    try {
+      console.log("trendFilter changed:", trendFilter);
+      console.log("domain trend length:", data?.trend?.length ?? 0);
+      console.log("url trend length:", data?.trendUrl?.length ?? 0);
+      console.log("selectedTrend length:", selectedTrend.length);
+    } catch (e) {
+      /* ignore */
+    }
+  }, [trendFilter, data]);
 
   const isAdmin = user?.role === "Admin";
 
@@ -294,10 +307,10 @@ export default function Dashboard() {
     }
 
     let isMounted = true;
+    let intervalId: number | undefined;
 
     const fetchDashboard = async () => {
       try {
-        console.log("API URL:", ENDPOINTS.DATA_DASHBOARD);
         const json = (await apiClient(
           ENDPOINTS.DATA_DASHBOARD,
         )) as BackendDashboardResponse;
@@ -306,28 +319,47 @@ export default function Dashboard() {
           const normalized = normalizeDashboardResponse(json);
           setData({
             ...normalized,
-            // Fallback to fetch time when backend cache timestamp is missing.
             updated_at: normalized.updated_at ?? new Date().toISOString(),
           });
         }
       } catch (err) {
         console.error("Failed to fetch dashboard:", err);
-        if (isMounted) {
-          setData(null);
-        }
+        if (isMounted) setData(null);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
+    // initial fetch
     fetchDashboard();
+
+    // poll every 15s
+    intervalId = window.setInterval(() => {
+      fetchDashboard();
+    }, 15000);
 
     return () => {
       isMounted = false;
+      if (intervalId) clearInterval(intervalId);
     };
   }, [authReady, token]);
+
+  const handleSyncClick = async () => {
+    if (!authReady || !token) return;
+    setIsSyncing(true);
+    try {
+      await apiClient(ENDPOINTS.DATA_DASHBOARD_SYNC, { method: "POST" });
+      // Immediately refresh local view
+      const refreshed = (await apiClient(
+        ENDPOINTS.DATA_DASHBOARD,
+      )) as BackendDashboardResponse;
+      setData(normalizeDashboardResponse(refreshed));
+    } catch (err) {
+      console.error("Dashboard sync failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (loading || !authReady || !token) {
     return <div>Loading dashboard...</div>;
@@ -348,9 +380,14 @@ export default function Dashboard() {
             Update terakhir: {formatWibDateTime(data?.updated_at)}
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncClick}
+          disabled={isSyncing}
+        >
           <RefreshCw className="h-4 w-4 mr-2" />
-          Sync Data
+          {isSyncing ? "Syncing..." : "Sync Data"}
         </Button>
       </div>
 
@@ -388,13 +425,38 @@ export default function Dashboard() {
               <h3 className="font-semibold text-sm">
                 {isAdmin ? "Tren Temuan Sistem" : "Tren Temuan Pribadi"}
               </h3>
-              <Select value={trendFilter} onValueChange={setTrendFilter}>
+              <Select
+                value={trendFilter}
+                onValueChange={(value: string) => {
+                  console.log("Trend Select changed:", value);
+                  console.log(
+                    "data.trend (domain) sample:",
+                    data?.trend?.slice(0, 3),
+                  );
+                  console.log(
+                    "data.trendUrl (url) sample:",
+                    data?.trendUrl?.slice(0, 3),
+                  );
+                  setTrendFilter(value);
+                }}
+                onOpenChange={(open) => console.log("Trend Select open:", open)}
+              >
                 <SelectTrigger className="w-28 h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Domain">Domain</SelectItem>
-                  <SelectItem value="URL">URL</SelectItem>
+                  <SelectItem
+                    value="Domain"
+                    onClick={() => console.log("SelectItem click: Domain")}
+                  >
+                    Domain
+                  </SelectItem>
+                  <SelectItem
+                    value="URL"
+                    onClick={() => console.log("SelectItem click: URL")}
+                  >
+                    URL
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

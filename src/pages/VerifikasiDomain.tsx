@@ -41,6 +41,7 @@ import {
   Save,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 
 export default function VerifikasiDomain() {
@@ -86,7 +87,7 @@ export default function VerifikasiDomain() {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
-      setSortDirection("asc");
+      setSortDirection("desc");
     }
   };
 
@@ -182,6 +183,7 @@ export default function VerifikasiDomain() {
   const buildDetailFromApi = (payload: {
     domain_id: string;
     domain_name: string;
+    domain_latest_status?: string | null;
     reasoning_verificator?: string | null;
     crawls: Array<{
       url: string;
@@ -194,7 +196,7 @@ export default function VerifikasiDomain() {
       screenshot: string | null;
       inner_text: string | null;
     }>;
-  }): DomainDetail => {
+  }): DomainDetail & { domainLatestStatus?: DomainStatus } => {
     const pages: DomainDetailPage[] = payload.crawls.map((crawl) => ({
       url: crawl.url,
       status: mapApiStatusToDomainStatus(crawl.status),
@@ -211,10 +213,14 @@ export default function VerifikasiDomain() {
     }));
 
     const firstPage = pages[0];
+    const domainLatestStatus = mapApiStatusToDomainStatus(
+      payload.domain_latest_status,
+    );
     return {
       domain: payload.domain_name,
       url: firstPage?.url ?? "",
       status: firstPage?.status ?? "Manual Check",
+      domainLatestStatus,
       confidence_score: firstPage?.confidence_score ?? 0,
       ai_reasoning: firstPage?.ai_reasoning ?? "-",
       user_reasoning: payload.reasoning_verificator ?? "",
@@ -299,7 +305,7 @@ export default function VerifikasiDomain() {
         if (!active) return;
         const mapped = buildDetailFromApi(response);
         setDomainDetail(mapped);
-        setVerifyStatus(mapped.status);
+        setVerifyStatus(mapped.domainLatestStatus || mapped.status);
         setUserReasoning(mapped.user_reasoning ?? "");
         setSelectedDetailUrl(mapped.grouped_pages?.[0]?.url ?? mapped.url);
       })
@@ -638,18 +644,45 @@ export default function VerifikasiDomain() {
               )}
             </DialogTitle>
             {groupedPages.length > 0 ? (
-              <Select value={selectedDetailUrl} onValueChange={setDetailByUrl}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Pilih URL" />
-                </SelectTrigger>
-                <SelectContent>
-                  {groupedPages.map((page) => (
-                    <SelectItem key={page.url} value={page.url}>
-                      {page.url}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Select
+                    value={selectedDetailUrl}
+                    onValueChange={setDetailByUrl}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Pilih URL" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {groupedPages.map((page) => (
+                        <SelectItem key={page.url} value={page.url}>
+                          {page.url}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => {
+                    if (selectedDetailUrl) {
+                      window.open(
+                        selectedDetailUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                    }
+                  }}
+                  disabled={!selectedDetailUrl}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ) : (
               <p className="text-xs text-muted-foreground truncate">
                 {selectedDetailUrl || "-"}
@@ -714,6 +747,12 @@ export default function VerifikasiDomain() {
                   <span className="text-muted-foreground">Waktu Crawl:</span>{" "}
                   {detailData?.crawled_at
                     ? new Date(detailData.crawled_at).toLocaleString("id-ID")
+                    : "-"}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">VIT Score:</span>{" "}
+                  {typeof detailData?.vit_score === "number"
+                    ? `${detailData.vit_score.toFixed(1)}%`
                     : "-"}
                 </div>
               </div>
