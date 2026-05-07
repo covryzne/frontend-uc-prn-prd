@@ -44,6 +44,7 @@ export interface DomainDetailResponse {
   success: boolean;
   domain_id: string;
   domain_name: string;
+  domain_latest_status: string | null;
   reasoning_verificator: string | null;
   crawls: DomainDetailItemApi[];
 }
