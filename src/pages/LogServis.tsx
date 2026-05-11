@@ -1,23 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ServiceLogTerminal } from "@/components/shared/ServiceLogTerminal";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Pagination } from "@/components/shared/Pagination";
-import type { LogItem, ServiceStatus } from "@/types";
+import type { ServiceStatus } from "@/types";
 import { RefreshCw, Server, CheckSquare } from "lucide-react";
-import {
-  fetchServiceHealth,
-  fetchServiceLogs,
-  type ServiceId,
-} from "@/services/logService";
+import { fetchServiceHealth, type ServiceId } from "@/services/logService";
 import { useToast } from "@/hooks/use-toast";
 
 const SERVICE_DEFS: Array<{ id: ServiceId; nama: string }> = [
@@ -37,14 +25,7 @@ export default function LogServis() {
       last_check: null,
     })),
   );
-  const [logs, setLogs] = useState<LogItem[]>([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Semua Status");
-  const [servisFilter, setServisFilter] = useState("Semua Servis");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
 
   const mapHealthStatus = (
     status: string,
@@ -106,54 +87,9 @@ export default function LogServis() {
     [toast],
   );
 
-  const refreshLogs = useCallback(async () => {
-    try {
-      setIsLoadingLogs(true);
-      const responses = await Promise.all(
-        SERVICE_DEFS.map((s) => fetchServiceLogs(s.id, 100)),
-      );
-      const merged = responses.flatMap((res) => res.logs || []);
-      merged.sort(
-        (a, b) => new Date(b.waktu).getTime() - new Date(a.waktu).getTime(),
-      );
-      setLogs(merged);
-    } catch (error) {
-      console.error("Failed to load service logs:", error);
-      toast({
-        title: "Gagal memuat log servis",
-        description:
-          error instanceof Error ? error.message : "Tidak bisa mengambil log.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingLogs(false);
-    }
-  }, [toast]);
-
   useEffect(() => {
     refreshServiceHealth();
-    refreshLogs();
-  }, [refreshLogs, refreshServiceHealth]);
-
-  const filteredLogs = useMemo(
-    () =>
-      logs.filter((l) => {
-        if (search && !l.detail.toLowerCase().includes(search.toLowerCase()))
-          return false;
-        if (statusFilter !== "Semua Status" && l.status !== statusFilter)
-          return false;
-        if (servisFilter !== "Semua Servis" && l.servis !== servisFilter)
-          return false;
-        return true;
-      }),
-    [logs, search, statusFilter, servisFilter],
-  );
-
-  const totalLogs = filteredLogs.length;
-  const paginatedLogs = filteredLogs.slice(
-    (page - 1) * perPage,
-    page * perPage,
-  );
+  }, [refreshServiceHealth]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -167,12 +103,9 @@ export default function LogServis() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              refreshServiceHealth();
-              refreshLogs();
-            }}
+            onClick={() => refreshServiceHealth()}
             className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
-            disabled={isLoadingServices || isLoadingLogs}
+            disabled={isLoadingServices}
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Health Check Semua
@@ -211,133 +144,13 @@ export default function LogServis() {
         </div>
       </div>
 
-      {/* Log Table */}
+      {/* Log Terminal */}
       <div className="space-y-3">
-        <h3 className="font-semibold text-sm">Log Aktivitas Worker</h3>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Input
-            placeholder="Cari log..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="sm:max-w-xs"
-          />
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => {
-              setStatusFilter(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["Semua Status", "Ok", "Error", "Warning"].map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={servisFilter}
-            onValueChange={(v) => {
-              setServisFilter(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["Semua Servis", ...SERVICE_DEFS.map((s) => s.nama)].map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left">
-                    <th className="p-3 font-medium text-muted-foreground">
-                      Waktu
-                    </th>
-                    <th className="p-3 font-medium text-muted-foreground">
-                      Servis
-                    </th>
-                    <th className="p-3 font-medium text-muted-foreground">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingLogs ? (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="p-4 text-center text-muted-foreground"
-                      >
-                        Loading logs...
-                      </td>
-                    </tr>
-                  ) : paginatedLogs.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="p-4 text-center text-muted-foreground"
-                      >
-                        Belum ada log yang cocok dengan filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedLogs.map((l, i) => (
-                      <tr
-                        key={i}
-                        className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                      >
-                        <td className="p-3 text-xs text-muted-foreground font-mono-code whitespace-nowrap">
-                          {new Date(l.waktu).toLocaleString("id-ID", {
-                            timeZone: "Asia/Jakarta",
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                          })}
-                        </td>
-                        <td className="p-3 text-xs font-medium">{l.servis}</td>
-                        <td className="p-3">
-                          <StatusBadge status={l.status} type="log" />
-                        </td>
-                        {/* <td className="p-3 text-xs text-muted-foreground max-w-[300px] truncate">
-                          {l.detail}
-                        </td> */}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Pagination
-          total={totalLogs}
-          page={page}
-          perPage={perPage}
-          onPageChange={setPage}
-          onPerPageChange={setPerPage}
-          perPageOptions={[10, 20, 50]}
+        <h3 className="font-semibold text-sm">Log Aktivitas Crawler</h3>
+        <ServiceLogTerminal
+          serviceId="crawler"
+          serviceName="Crawler"
+          autoRefreshInterval={3000}
         />
       </div>
     </div>
