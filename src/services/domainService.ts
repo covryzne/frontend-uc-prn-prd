@@ -73,6 +73,9 @@ export interface BulkInferenceResponse {
 export async function fetchDomains(params: {
   search?: string;
   status?: ApiDomainStatus;
+  verification_status?: "verified" | "unverified";
+  time_from?: string;
+  time_to?: string;
   sort_by?: "timestamp" | "domain" | "score" | "vit_score";
   order?: "asc" | "desc";
   page?: number;
@@ -81,6 +84,10 @@ export async function fetchDomains(params: {
   const query = new URLSearchParams();
   if (params.search) query.set("search", params.search);
   if (params.status) query.set("status", params.status);
+  if (params.verification_status)
+    query.set("verification_status", params.verification_status);
+  if (params.time_from) query.set("time_from", params.time_from);
+  if (params.time_to) query.set("time_to", params.time_to);
   if (params.sort_by) query.set("sort_by", params.sort_by);
   if (params.order) query.set("order", params.order);
   if (params.page) query.set("page", String(params.page));
