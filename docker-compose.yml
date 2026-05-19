@@ -7,10 +7,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://backend:3000
+        VITE_API_URL: http://70.30.158.46:16257
     container_name: frontend-mvp
     ports:
-      - "3001:3000"
+      - "80:3000"
     env_file:
       - .env
     networks:
