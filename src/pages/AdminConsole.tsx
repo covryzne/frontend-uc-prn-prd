@@ -64,10 +64,14 @@ export default function AdminConsole() {
   const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
   const [isUpdatingWhitelist, setIsUpdatingWhitelist] = useState(false);
+  const [totalKeywords, setTotalKeywords] = useState(0);
 
   // Fetch keywords on component mount
   useEffect(() => {
     loadKeywords();
+  }, [kwPage, kwPerPage]);
+
+  useEffect(() => {
     loadWhitelist();
   }, []);
 
@@ -182,41 +186,51 @@ export default function AdminConsole() {
   };
 
   const loadKeywords = async () => {
-    try {
-      setIsLoadingKeywords(true);
-      const response = await fetchKeywords(1, 100);
-      if (response.success && response.data) {
-        const formattedKeywords: KeywordItem[] = response.data.map(
-          (k, index) => ({
-            no: index + 1,
-            keyword: k.keyword,
-            id: k.id,
-          }),
-        );
-        setKeywords(formattedKeywords);
-        setQueueSummary(
-          response.queue_summary ?? {
-            pending: 0,
-            processing: 0,
-            done: 0,
-            failed: 0,
-          },
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch keywords:", error);
-      toast({
-        title: "Gagal memuat keyword",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Tidak bisa mengambil data keyword dari server.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingKeywords(false);
+  try {
+    setIsLoadingKeywords(true);
+
+    const response = await fetchKeywords(
+      kwPage,
+      kwPerPage,
+    );
+
+    if (response.success && response.data) {
+
+      const formattedKeywords: KeywordItem[] =
+        response.data.map((k, index) => ({
+          no: (kwPage - 1) * kwPerPage + index + 1,
+          keyword: k.keyword,
+          id: k.id,
+        }));
+
+      setKeywords(formattedKeywords);
+
+      setTotalKeywords(response.total);
+
+      setQueueSummary(
+        response.queue_summary ?? {
+          pending: 0,
+          processing: 0,
+          done: 0,
+          failed: 0,
+        },
+      );
     }
-  };
+  } catch (error) {
+    console.error("Failed to fetch keywords:", error);
+
+    toast({
+      title: "Gagal memuat keyword",
+      description:
+        error instanceof Error
+          ? error.message
+          : "Tidak bisa mengambil data keyword dari server.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoadingKeywords(false);
+  }
+};
 
   const toggleEngine = (e: string) => {
     setEngines((prev) =>
@@ -415,10 +429,8 @@ export default function AdminConsole() {
     }
   };
 
-  const paginatedKw = keywords.slice(
-    (kwPage - 1) * kwPerPage,
-    kwPage * kwPerPage,
-  );
+  // Server-side pagination: keywords already contains only current page
+  const paginatedKw = keywords;
 
   return (
     <div className="w-full space-y-6 animate-fade-in">
@@ -629,7 +641,7 @@ export default function AdminConsole() {
         <CardContent className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm font-semibold">
-              Daftar Keyword ({keywords.length.toLocaleString("id-ID")})
+              Daftar Keyword ({totalKeywords.toLocaleString("id-ID")})
             </Label>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="mr-1">
@@ -709,12 +721,12 @@ export default function AdminConsole() {
             </table>
           </div>
           <Pagination
-            total={keywords.length}
+            total={totalKeywords}
             page={kwPage}
             perPage={kwPerPage}
             onPageChange={setKwPage}
             onPerPageChange={setKwPerPage}
-            perPageOptions={[10, 20, 50]}
+            perPageOptions={[10, 20, 50, 100, 500, 1000]}
           />
         </CardContent>
       </Card>
