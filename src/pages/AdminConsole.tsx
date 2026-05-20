@@ -99,7 +99,8 @@ export default function AdminConsole() {
   const managedSchedule =
     schedules.find((item) => (item.status || "").toLowerCase() === "running") ||
     (schedules.length > 0 ? schedules[0] : null);
-  const isCrawling = Boolean(managedSchedule?.is_running);
+  const autostartEnabled = managedSchedule?.autostart_enabled ?? true;
+  const isCrawling = Boolean(autostartEnabled && managedSchedule?.is_running);
 
   const [selectedIntervalLocal, setSelectedIntervalLocal] = useState<
     string | undefined
@@ -121,14 +122,16 @@ export default function AdminConsole() {
   }, [managedSchedule]);
 
   const scheduleOptions = [
+    { label: "Setiap 15 menit", value: "15m" },
     { label: "Setiap 30 menit", value: "30m" },
     { label: "Setiap 1 jam", value: "1h" },
     { label: "Setiap 2 jam", value: "2h" },
     { label: "Setiap 4 jam", value: "4h" },
+    { label: "Setiap 6 jam", value: "6h" },
     { label: "Setiap 8 jam", value: "8h" },
     { label: "Setiap 10 jam", value: "10h" },
     { label: "Setiap 12 jam", value: "12h" },
-  ];
+];
 
   const onSelectChange = (val: string) => {
     if (!managedSchedule || val === selectedIntervalLocal) return;
@@ -502,12 +505,16 @@ export default function AdminConsole() {
                         </span>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            isRunning
+                            autostartEnabled && isRunning
                               ? "bg-green-100 text-green-800"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {isRunning ? "Sedang berjalan" : "Berhenti"}
+                          {!autostartEnabled
+                            ? "Nonaktif"
+                            : isRunning
+                              ? "Sedang berjalan"
+                              : "Berhenti"}
                         </span>
                       </div>
                       <div className="space-y-1">
@@ -531,7 +538,7 @@ export default function AdminConsole() {
                         </Select>
                       </div>
 
-                      {isRunning && (
+                      {/* {isRunning && (
                         <Button
                           size="sm"
                           variant="destructive"
@@ -539,7 +546,7 @@ export default function AdminConsole() {
                         >
                           Stop Schedule
                         </Button>
-                      )}
+                      )} */}
                     </div>
                   );
                 })()
@@ -644,9 +651,9 @@ export default function AdminConsole() {
               Daftar Keyword ({totalKeywords.toLocaleString("id-ID")})
             </Label>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="mr-1">
+              {/* <Badge variant="secondary" className="mr-1">
                 Queue {queueSummary?.pending ?? 0}
-              </Badge>
+              </Badge> */}
               <Button size="sm" onClick={() => setKwModalOpen(true)}>
                 Add Keyword
               </Button>
