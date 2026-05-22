@@ -61,6 +61,7 @@ export interface DomainItem {
 export interface DomainDetailPage {
   url: string;
   status: DomainStatus;
+  statusCode?: number | null;
   confidence_score: number;
   ai_reasoning: string;
   user_reasoning?: string;
