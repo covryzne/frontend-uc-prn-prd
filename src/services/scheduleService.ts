@@ -10,6 +10,7 @@ export interface ScheduleItem {
   next_run_at: string | null;
   is_running: boolean;
   last_error?: string | null;
+  autostart_enabled?: boolean;
 }
 
 async function getSchedules(): Promise<ScheduleItem[]> {

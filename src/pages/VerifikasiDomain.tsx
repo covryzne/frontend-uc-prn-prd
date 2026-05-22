@@ -38,7 +38,6 @@ import {
   buildExportUrl,
   fetchDomainDetail,
   fetchDomains,
-  runBulkInference,
   updateDomainStatus,
 } from "@/services/domainService";
 import {
@@ -85,6 +84,7 @@ export default function VerifikasiDomain() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<DomainStatus>("Pornografi");
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [exportTimeFrom, setExportTimeFrom] = useState("");
   const [exportTimeTo, setExportTimeTo] = useState("");
@@ -125,7 +125,11 @@ export default function VerifikasiDomain() {
   const [refreshTick, setRefreshTick] = useState(0);
   const groupedPages = domainDetail?.grouped_pages ?? [];
   const detailPages = groupedPages.length
-    ? groupedPages
+    ? Array.from(
+        new Map(
+          groupedPages.map((page) => [page.url, page]),
+        ).values(),
+      )
     : domainDetail
       ? [domainDetail]
       : [];
@@ -138,6 +142,7 @@ export default function VerifikasiDomain() {
     detailPages.findIndex((page) => page.url === selectedDetailUrl),
   );
   const activeScreenshot = detailData?.screenshots?.[0];
+  const uniqueDetailUrlCount = detailPages.length;
   type SortField = "timestamp" | "domain" | "vit_score";
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -203,7 +208,7 @@ export default function VerifikasiDomain() {
   const setDetailByUrl = (url: string) => {
     setSelectedDetailUrl(url);
     const selectedPage = detailPages.find((page) => page.url === url);
-    if (selectedPage) setVerifyStatus(selectedPage.status as DomainStatus);
+    if (selectedPage) setVerifyStatus(selectedPage.status);
   };
 
   const goToRelativePage = (direction: -1 | 1) => {
@@ -218,25 +223,38 @@ export default function VerifikasiDomain() {
     setUserReasoning("");
     setDetailOpen(true);
   };
-  const [isReasoningPending, setIsReasoningPending] = useState(false);
-  const handleBulkReasoning = async () => {
+  const [isBulkVerifying, setIsBulkVerifying] = useState(false);
+  const handleBulkVerify = async () => {
     if (!selectedIds.size) return;
-    setIsReasoningPending(true);
-    const pendingDomains = domains.filter(
-      (d) => selectedIds.has(d.id) && d.status === "Manual Check",
-    );
-    if (!pendingDomains.length) {
-      setIsReasoningPending(false);
+    setIsBulkVerifying(true);
+    const selectedDomains = domains.filter((d) => selectedIds.has(d.id));
+    if (!selectedDomains.length) {
+      setIsBulkVerifying(false);
       return;
     }
 
     try {
+      const results = await Promise.allSettled(
+        selectedDomains.map((d) =>
+          updateDomainStatus(d.id, {
+            status: mapDomainStatusToApi(bulkStatus),
+          }),
+        ),
+      );
+
+      const failedCount = results.filter((r) => r.status === "rejected").length;
+      if (failedCount > 0) {
+        setLoadError(`${failedCount} domain gagal diverifikasi`);
+      }
+
+      /*
       const response = await runBulkInference({
-        domain_ids: pendingDomains.map((d) => d.id),
+        domain_ids: selectedDomains.map((d) => d.id),
         run_ocr: true,
       });
 
       console.log("Bulk inference result:", response);
+      */
       setSelectedIds(new Set());
       setBulkMode(false);
       setRefreshTick((prev) => prev + 1);
@@ -244,10 +262,10 @@ export default function VerifikasiDomain() {
       setLoadError(
         error instanceof Error
           ? error.message
-          : "Bulk inference gagal dijalankan",
+          : "Bulk verifikasi gagal dijalankan",
       );
     } finally {
-      setIsReasoningPending(false);
+      setIsBulkVerifying(false);
     }
   };
 
@@ -372,6 +390,7 @@ export default function VerifikasiDomain() {
       timestamp: string | null;
       vit_score: number | null;
       screenshot: string | null;
+      thumbnail: string | null;
       inner_text: string | null;
     }>;
   }): DomainDetail & { domainLatestStatus?: DomainStatus } => {
@@ -496,7 +515,7 @@ export default function VerifikasiDomain() {
         if (!active) return;
         const mapped = buildDetailFromApi(response);
         setDomainDetail(mapped);
-        setVerifyStatus(mapped.domainLatestStatus || mapped.status);
+        setVerifyStatus(mapped.grouped_pages?.[0]?.status ?? mapped.status);
         setUserReasoning(mapped.user_reasoning ?? "");
         setSelectedDetailUrl(mapped.grouped_pages?.[0]?.url ?? mapped.url);
       })
@@ -730,13 +749,34 @@ export default function VerifikasiDomain() {
         <Card>
           <CardContent className="p-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <span className="text-sm">{selectedIds.size} dipilih</span>
+            <Select
+              value={bulkStatus}
+              onValueChange={(value) => setBulkStatus(value as DomainStatus)}
+            >
+              <SelectTrigger className="h-8 text-xs sm:w-[180px]">
+                <SelectValue placeholder="Pilih status" />
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  [
+                    "Pornografi",
+                    "Non-Pornografi",
+                    "Manual Check",
+                  ] as DomainStatus[]
+                ).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               size="sm"
               className="text-xs"
-              onClick={handleBulkReasoning}
-              disabled={isReasoningPending}
+              onClick={handleBulkVerify}
+              disabled={isBulkVerifying}
             >
-              {isReasoningPending ? "Memproses..." : "Lakukan Inference Model"}
+              {isBulkVerifying ? "Memverifikasi..." : "Verifikasi Terpilih"}
             </Button>
           </CardContent>
         </Card>
@@ -839,8 +879,13 @@ export default function VerifikasiDomain() {
                           day: "2-digit",
                           month: "short",
                           year: "numeric",
+                          timeZone: "Asia/Jakarta",
                         })}
-                        , {d.timestamp.slice(11, 16)}
+                        , {new Date(d.timestamp).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: "Asia/Jakarta",
+                        })}
                       </td>
                       <td className="p-3 font-mono text-xs max-w-[200px] truncate">
                         {d.domain}
@@ -1154,7 +1199,7 @@ export default function VerifikasiDomain() {
                     </SelectTrigger>
 
                     <SelectContent>
-                      {groupedPages.map((page) => (
+                      {detailPages.map((page) => (
                         <SelectItem key={page.url} value={page.url}>
                           {page.url}
                         </SelectItem>
@@ -1245,7 +1290,9 @@ export default function VerifikasiDomain() {
                 <div>
                   <span className="text-muted-foreground">Waktu Crawl:</span>{" "}
                   {detailData?.crawled_at
-                    ? new Date(detailData.crawled_at).toLocaleString("id-ID")
+                    ? new Date(detailData.crawled_at).toLocaleString("id-ID", {
+                        timeZone: "Asia/Jakarta",
+                      })
                     : "-"}
                 </div>
                 <div>
@@ -1260,7 +1307,7 @@ export default function VerifikasiDomain() {
             {/* Screenshots */}
             <div className="space-y-3 border-t pt-4">
               <h4 className="text-sm font-semibold">
-                {domainDetail?.total_url_in_domain ?? 0} URL dalam domain ini
+                {uniqueDetailUrlCount} URL dalam domain ini
               </h4>
               <div className="relative rounded-lg bg-muted aspect-video overflow-hidden border">
                 {activeScreenshot ? (
