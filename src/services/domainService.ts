@@ -37,6 +37,7 @@ export interface DomainDetailItemApi {
   reasoning: string | null;
   inner_text: string | null;
   screenshot: string | null;
+  thumbnail: string | null;
   is_amp: boolean;
 }
 

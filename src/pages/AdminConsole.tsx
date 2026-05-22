@@ -64,10 +64,14 @@ export default function AdminConsole() {
   const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
   const [isUpdatingWhitelist, setIsUpdatingWhitelist] = useState(false);
+  const [totalKeywords, setTotalKeywords] = useState(0);
 
   // Fetch keywords on component mount
   useEffect(() => {
     loadKeywords();
+  }, [kwPage, kwPerPage]);
+
+  useEffect(() => {
     loadWhitelist();
   }, []);
 
@@ -95,7 +99,8 @@ export default function AdminConsole() {
   const managedSchedule =
     schedules.find((item) => (item.status || "").toLowerCase() === "running") ||
     (schedules.length > 0 ? schedules[0] : null);
-  const isCrawling = Boolean(managedSchedule?.is_running);
+  const autostartEnabled = managedSchedule?.autostart_enabled ?? true;
+  const isCrawling = Boolean(autostartEnabled && managedSchedule?.is_running);
 
   const [selectedIntervalLocal, setSelectedIntervalLocal] = useState<
     string | undefined
@@ -117,14 +122,16 @@ export default function AdminConsole() {
   }, [managedSchedule]);
 
   const scheduleOptions = [
+    { label: "Setiap 15 menit", value: "15m" },
     { label: "Setiap 30 menit", value: "30m" },
     { label: "Setiap 1 jam", value: "1h" },
     { label: "Setiap 2 jam", value: "2h" },
     { label: "Setiap 4 jam", value: "4h" },
+    { label: "Setiap 6 jam", value: "6h" },
     { label: "Setiap 8 jam", value: "8h" },
     { label: "Setiap 10 jam", value: "10h" },
     { label: "Setiap 12 jam", value: "12h" },
-  ];
+];
 
   const onSelectChange = (val: string) => {
     if (!managedSchedule || val === selectedIntervalLocal) return;
@@ -182,41 +189,51 @@ export default function AdminConsole() {
   };
 
   const loadKeywords = async () => {
-    try {
-      setIsLoadingKeywords(true);
-      const response = await fetchKeywords(1, 100);
-      if (response.success && response.data) {
-        const formattedKeywords: KeywordItem[] = response.data.map(
-          (k, index) => ({
-            no: index + 1,
-            keyword: k.keyword,
-            id: k.id,
-          }),
-        );
-        setKeywords(formattedKeywords);
-        setQueueSummary(
-          response.queue_summary ?? {
-            pending: 0,
-            processing: 0,
-            done: 0,
-            failed: 0,
-          },
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch keywords:", error);
-      toast({
-        title: "Gagal memuat keyword",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Tidak bisa mengambil data keyword dari server.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingKeywords(false);
+  try {
+    setIsLoadingKeywords(true);
+
+    const response = await fetchKeywords(
+      kwPage,
+      kwPerPage,
+    );
+
+    if (response.success && response.data) {
+
+      const formattedKeywords: KeywordItem[] =
+        response.data.map((k, index) => ({
+          no: (kwPage - 1) * kwPerPage + index + 1,
+          keyword: k.keyword,
+          id: k.id,
+        }));
+
+      setKeywords(formattedKeywords);
+
+      setTotalKeywords(response.total);
+
+      setQueueSummary(
+        response.queue_summary ?? {
+          pending: 0,
+          processing: 0,
+          done: 0,
+          failed: 0,
+        },
+      );
     }
-  };
+  } catch (error) {
+    console.error("Failed to fetch keywords:", error);
+
+    toast({
+      title: "Gagal memuat keyword",
+      description:
+        error instanceof Error
+          ? error.message
+          : "Tidak bisa mengambil data keyword dari server.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoadingKeywords(false);
+  }
+};
 
   const toggleEngine = (e: string) => {
     setEngines((prev) =>
@@ -348,15 +365,6 @@ export default function AdminConsole() {
   };
 
   const openEditModal = (keyword: KeywordItem) => {
-    if (isCrawling) {
-      toast({
-        title: "Keyword sudah dalam proses crawl",
-        description: "Tidak bisa diedit saat crawling sedang berjalan.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setEditingKeywordId(keyword.id || null);
     setEditingKeywordText(keyword.keyword);
     setEditModalOpen(true);
@@ -424,10 +432,8 @@ export default function AdminConsole() {
     }
   };
 
-  const paginatedKw = keywords.slice(
-    (kwPage - 1) * kwPerPage,
-    kwPage * kwPerPage,
-  );
+  // Server-side pagination: keywords already contains only current page
+  const paginatedKw = keywords;
 
   return (
     <div className="w-full space-y-6 animate-fade-in">
@@ -499,12 +505,16 @@ export default function AdminConsole() {
                         </span>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            isRunning
+                            autostartEnabled && isRunning
                               ? "bg-green-100 text-green-800"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {isRunning ? "Sedang berjalan" : "Berhenti"}
+                          {!autostartEnabled
+                            ? "Nonaktif"
+                            : isRunning
+                              ? "Sedang berjalan"
+                              : "Berhenti"}
                         </span>
                       </div>
                       <div className="space-y-1">
@@ -528,7 +538,7 @@ export default function AdminConsole() {
                         </Select>
                       </div>
 
-                      {isRunning && (
+                      {/* {isRunning && (
                         <Button
                           size="sm"
                           variant="destructive"
@@ -536,7 +546,7 @@ export default function AdminConsole() {
                         >
                           Stop Schedule
                         </Button>
-                      )}
+                      )} */}
                     </div>
                   );
                 })()
@@ -638,12 +648,12 @@ export default function AdminConsole() {
         <CardContent className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm font-semibold">
-              Daftar Keyword ({keywords.length.toLocaleString("id-ID")})
+              Daftar Keyword ({totalKeywords.toLocaleString("id-ID")})
             </Label>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="mr-1">
+              {/* <Badge variant="secondary" className="mr-1">
                 Queue {queueSummary?.pending ?? 0}
-              </Badge>
+              </Badge> */}
               <Button size="sm" onClick={() => setKwModalOpen(true)}>
                 Add Keyword
               </Button>
@@ -718,12 +728,12 @@ export default function AdminConsole() {
             </table>
           </div>
           <Pagination
-            total={keywords.length}
+            total={totalKeywords}
             page={kwPage}
             perPage={kwPerPage}
             onPageChange={setKwPage}
             onPerPageChange={setKwPerPage}
-            perPageOptions={[10, 20, 50]}
+            perPageOptions={[10, 20, 50, 100, 500, 1000]}
           />
         </CardContent>
       </Card>
