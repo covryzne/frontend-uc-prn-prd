@@ -82,6 +82,7 @@ export interface DomainItem {
 }
 
 export interface DomainDetailPage {
+  crawl_id: string;
   url: string;
   status: DomainStatus;
   statusCode?: number | null;
@@ -98,6 +99,7 @@ export interface DomainDetailPage {
 
 export interface DomainDetail {
   domain: string;
+  crawl_id?: string;
   url: string;
   status: DomainStatus;
   confidence_score: number;
