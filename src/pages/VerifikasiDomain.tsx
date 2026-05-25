@@ -125,11 +125,7 @@ export default function VerifikasiDomain() {
   const [refreshTick, setRefreshTick] = useState(0);
   const groupedPages = domainDetail?.grouped_pages ?? [];
   const detailPages = groupedPages.length
-    ? Array.from(
-        new Map(
-          groupedPages.map((page) => [page.url, page]),
-        ).values(),
-      )
+    ? groupedPages
     : domainDetail
       ? [domainDetail]
       : [];
@@ -371,7 +367,7 @@ export default function VerifikasiDomain() {
   };
 
   const normalizeScore = (value?: number | null) => {
-    if (value === null || value === undefined || Number.isNaN(value)) return 0;
+    if (value === null || value === undefined || Number.isNaN(value)) return null;
     const normalized = value <= 1 ? value * 100 : value;
     return Math.max(0, Math.min(100, Number(normalized.toFixed(1))));
   };
@@ -379,51 +375,68 @@ export default function VerifikasiDomain() {
   const buildDetailFromApi = (payload: {
     domain_id: string;
     domain_name: string;
-    domain_latest_status?: string | null;
     reasoning_verificator?: string | null;
     crawls: Array<{
-      url: string;
-      status: string | null;
+      crawl_id: string;
+      keyword: string | null;
       confidence_score: number | null;
       reasoning: string | null;
-      keyword: string | null;
-      timestamp: string | null;
-      vit_score: number | null;
-      screenshot: string | null;
-      thumbnail: string | null;
       inner_text: string | null;
+      latest: {
+        crawl: {
+          timestamp: string | null;
+          url: string | null;
+          status_code: number | null;
+        };
+        scraped: {
+          thumbnail: string | null;
+          screenshot_path: string | null;
+        } | null;
+        inference: {
+          vit_score: number | null;
+          status: "porno" | "non_porno" | "manual_check" | null;
+          overlay_image: string | null;
+        } | null;
+      };
     }>;
-  }): DomainDetail & { domainLatestStatus?: DomainStatus } => {
+  }): DomainDetail => {
     const pages: DomainDetailPage[] = payload.crawls.map((crawl) => ({
-      url: crawl.url,
-      status: mapApiStatusToDomainStatus(crawl.status),
-      confidence_score: normalizeScore(crawl.confidence_score),
+      url: crawl.latest.crawl.url ?? "",
+      status: mapApiStatusToDomainStatus(crawl.latest.inference?.status),
+      statusCode: crawl.latest.crawl.status_code ?? null,
+      confidence_score: normalizeScore(crawl.confidence_score) ?? 0,
       ai_reasoning: crawl.reasoning ?? "-",
       user_reasoning: payload.reasoning_verificator ?? "",
       kata_kunci: crawl.keyword ? [crawl.keyword] : [],
-      crawled_at: crawl.timestamp ?? new Date().toISOString(),
-      vit_score: normalizeScore(crawl.vit_score),
-      screenshots: crawl.screenshot
-        ? [{ url: crawl.screenshot, caption: "Crawl screenshot" }]
+      crawled_at: crawl.latest.crawl.timestamp ?? new Date().toISOString(),
+      vit_score: normalizeScore(crawl.latest.inference?.vit_score),
+      screenshots: (crawl.latest.inference?.overlay_image ||
+        crawl.latest.scraped?.screenshot_path)
+        ? [
+            {
+              url:
+                crawl.latest.inference?.overlay_image ??
+                crawl.latest.scraped?.screenshot_path ??
+                "",
+              caption: "Crawl screenshot",
+            },
+          ]
         : [],
       konten_terekstrak: crawl.inner_text ?? "-",
+      latest: crawl.latest,
     }));
 
     const firstPage = pages[0];
-    const domainLatestStatus = mapApiStatusToDomainStatus(
-      payload.domain_latest_status,
-    );
     return {
       domain: payload.domain_name,
       url: firstPage?.url ?? "",
       status: firstPage?.status ?? "Manual Check",
-      domainLatestStatus,
       confidence_score: firstPage?.confidence_score ?? 0,
       ai_reasoning: firstPage?.ai_reasoning ?? "-",
       user_reasoning: payload.reasoning_verificator ?? "",
       kata_kunci: firstPage?.kata_kunci ?? [],
       crawled_at: firstPage?.crawled_at ?? new Date().toISOString(),
-      vit_score: firstPage?.vit_score ?? 0,
+      vit_score: firstPage?.vit_score ?? null,
       screenshots: firstPage?.screenshots ?? [],
       konten_terekstrak: firstPage?.konten_terekstrak ?? "-",
       total_url_in_domain: pages.length,
@@ -464,15 +477,12 @@ export default function VerifikasiDomain() {
         const mapped = response.data.map((item) => ({
           id: item.id,
           domain: item.domain,
-          timestamp: item.timestamp?.[0] ?? new Date().toISOString(),
-          // Prefer explicit latestStatus from server, fall back to first status in array
-          status: mapApiStatusToDomainStatus(
-            item.latestStatus ?? item.status?.[0],
-          ),
-          score: normalizeScore(item.finalScore),
-          vitScore: normalizeScore(item.vitScore ?? item.finalScore),
-          screenshot: item.screenshot?.[0] ?? null,
-          verifikator: item.verifiedBy?.[0] ?? null,
+          timestamp: item.latest.crawl.timestamp ?? new Date().toISOString(),
+          status: mapApiStatusToDomainStatus(item.latest.inference?.status),
+          score: normalizeScore(item.latest.inference?.vit_score),
+          vitScore: normalizeScore(item.latest.inference?.vit_score),
+          screenshot: item.latest.scraped?.thumbnail ?? null,
+          verifikator: item.verifiedBy ?? null,
           urlCount: item.url_count,
         }));
         setDomains(mapped);
