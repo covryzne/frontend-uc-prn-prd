@@ -77,7 +77,10 @@ export default function VerifikasiDomain() {
   const [selectedDomain, setSelectedDomain] = useState<DomainItem | null>(null);
   const [userReasoning, setUserReasoning] = useState("");
   const [verifyStatus, setVerifyStatus] = useState<DomainStatus>("Pornografi");
-  const [selectedDetailUrl, setSelectedDetailUrl] = useState("");
+  const [originalDetailStatus, setOriginalDetailStatus] =
+    useState<DomainStatus | null>(null);
+  const [originalUserReasoning, setOriginalUserReasoning] = useState("");
+  const [selectedCrawlId, setSelectedCrawlId] = useState("");
   const [domainDetail, setDomainDetail] = useState<DomainDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -131,12 +134,12 @@ export default function VerifikasiDomain() {
       ? [domainDetail]
       : [];
   const detailData = detailPages.length
-    ? (detailPages.find((page) => page.url === selectedDetailUrl) ??
+    ? (detailPages.find((page) => page.crawl_id === selectedCrawlId) ??
       detailPages[0])
     : null;
   const activePageIndex = Math.max(
     0,
-    detailPages.findIndex((page) => page.url === selectedDetailUrl),
+    detailPages.findIndex((page) => page.crawl_id === selectedCrawlId),
   );
   const activeScreenshot = detailData?.screenshots?.[0];
   const uniqueDetailUrlCount = detailPages.length;
@@ -202,11 +205,29 @@ export default function VerifikasiDomain() {
     else setSelectedIds(new Set(domains.map((d) => d.id)));
   };
 
-  const setDetailByUrl = (url: string) => {
-    setSelectedDetailUrl(url);
-    const selectedPage = detailPages.find((page) => page.url === url);
+  const setDetailByCrawlId = (crawlId: string) => {
+    setSelectedCrawlId(crawlId);
+    const selectedPage = detailPages.find((page) => page.crawl_id === crawlId);
     if (selectedPage) {
       setVerifyStatus(selectedPage.status);
+      const baselineReasoning = selectedPage.user_reasoning ?? "";
+      setOriginalDetailStatus(selectedPage.status);
+      setOriginalUserReasoning(baselineReasoning);
+      setUserReasoning(baselineReasoning);
+    }
+  };
+
+  const handleVerifyStatusChange = (nextStatus: DomainStatus) => {
+    setVerifyStatus(nextStatus);
+    if (!originalDetailStatus) return;
+
+    if (nextStatus === originalDetailStatus) {
+      setUserReasoning(originalUserReasoning);
+      return;
+    }
+
+    if (userReasoning === originalUserReasoning) {
+      setUserReasoning("");
     }
   };
 
@@ -214,7 +235,7 @@ export default function VerifikasiDomain() {
     if (detailPages.length <= 1) return;
     const nextIndex =
       (activePageIndex + direction + detailPages.length) % detailPages.length;
-    setDetailByUrl(detailPages[nextIndex].url);
+    setDetailByCrawlId(detailPages[nextIndex].crawl_id);
   };
 
   const openDetail = (d: DomainItem) => {
@@ -370,7 +391,8 @@ export default function VerifikasiDomain() {
   };
 
   const normalizeScore = (value?: number | null) => {
-    if (value === null || value === undefined || Number.isNaN(value)) return null;
+    if (value === null || value === undefined || Number.isNaN(value))
+      return null;
     const normalized = value <= 1 ? value * 100 : value;
     return Math.max(0, Math.min(100, Number(normalized.toFixed(1))));
   };
@@ -384,6 +406,7 @@ export default function VerifikasiDomain() {
       keyword: string | null;
       confidence_score: number | null;
       reasoning: string | null;
+      user_reasoning?: string | null;
       inner_text: string | null;
       latest: {
         crawl: {
@@ -404,27 +427,29 @@ export default function VerifikasiDomain() {
     }>;
   }): DomainDetail => {
     const pages: DomainDetailPage[] = payload.crawls.map((crawl) => ({
+      crawl_id: crawl.crawl_id,
       url: crawl.latest.crawl.url ?? "",
       status: mapApiStatusToDomainStatus(crawl.latest.inference?.status),
       statusCode: crawl.latest.crawl.status_code ?? null,
       confidence_score: normalizeScore(crawl.confidence_score) ?? 0,
       ai_reasoning: crawl.reasoning ?? "-",
-      user_reasoning: payload.reasoning_verificator ?? "",
+      user_reasoning: crawl.user_reasoning ?? "",
       kata_kunci: crawl.keyword ? [crawl.keyword] : [],
       crawled_at: crawl.latest.crawl.timestamp ?? new Date().toISOString(),
       vit_score: normalizeScore(crawl.latest.inference?.vit_score),
-      screenshots: (crawl.latest.inference?.overlay_image ||
-        crawl.latest.scraped?.screenshot_path)
-        ? [
-            {
-              url:
-                crawl.latest.inference?.overlay_image ??
-                crawl.latest.scraped?.screenshot_path ??
-                "",
-              caption: "Crawl screenshot",
-            },
-          ]
-        : [],
+      screenshots:
+        crawl.latest.inference?.overlay_image ||
+        crawl.latest.scraped?.screenshot_path
+          ? [
+              {
+                url:
+                  crawl.latest.inference?.overlay_image ??
+                  crawl.latest.scraped?.screenshot_path ??
+                  "",
+                caption: "Crawl screenshot",
+              },
+            ]
+          : [],
       konten_terekstrak: crawl.inner_text ?? "-",
       latest: crawl.latest,
     }));
@@ -432,11 +457,12 @@ export default function VerifikasiDomain() {
     const firstPage = pages[0];
     return {
       domain: payload.domain_name,
+      crawl_id: firstPage?.crawl_id,
       url: firstPage?.url ?? "",
       status: firstPage?.status ?? "Manual Check",
       confidence_score: firstPage?.confidence_score ?? 0,
       ai_reasoning: firstPage?.ai_reasoning ?? "-",
-      user_reasoning: payload.reasoning_verificator ?? "",
+      user_reasoning: firstPage?.user_reasoning ?? "",
       kata_kunci: firstPage?.kata_kunci ?? [],
       crawled_at: firstPage?.crawled_at ?? new Date().toISOString(),
       vit_score: firstPage?.vit_score ?? null,
@@ -528,9 +554,13 @@ export default function VerifikasiDomain() {
         if (!active) return;
         const mapped = buildDetailFromApi(response);
         setDomainDetail(mapped);
-        setVerifyStatus(mapped.grouped_pages?.[0]?.status ?? mapped.status);
-        setUserReasoning(mapped.user_reasoning ?? "");
-        setSelectedDetailUrl(mapped.grouped_pages?.[0]?.url ?? mapped.url);
+        const firstPage = mapped.grouped_pages?.[0] ?? mapped;
+        const baselineReasoning = firstPage.user_reasoning ?? "";
+        setVerifyStatus(firstPage.status);
+        setOriginalDetailStatus(firstPage.status);
+        setOriginalUserReasoning(baselineReasoning);
+        setUserReasoning(baselineReasoning);
+        setSelectedCrawlId(firstPage.crawl_id ?? "");
       })
       .catch((error: Error) => {
         if (!active) return;
@@ -550,9 +580,13 @@ export default function VerifikasiDomain() {
     if (!selectedDomain) return;
     setIsSaving(true);
     try {
+      const activeCrawlId = detailPages.find(
+        (page) => page.crawl_id === selectedCrawlId,
+      )?.crawl_id;
       await updateDomainStatus(selectedDomain.id, {
         status: mapDomainStatusToApi(verifyStatus),
         reasoning_verificator: userReasoning || undefined,
+        crawl_id: activeCrawlId,
       });
       setDetailRefreshTick((prev) => prev + 1);
       setDetailOpen(false);
@@ -895,7 +929,8 @@ export default function VerifikasiDomain() {
                           year: "numeric",
                           timeZone: "Asia/Jakarta",
                         })}
-                        , {new Date(d.timestamp).toLocaleTimeString("id-ID", {
+                        ,{" "}
+                        {new Date(d.timestamp).toLocaleTimeString("id-ID", {
                           hour: "2-digit",
                           minute: "2-digit",
                           timeZone: "Asia/Jakarta",
@@ -1165,7 +1200,9 @@ export default function VerifikasiDomain() {
             <div className="absolute right-12 top-0">
               <Select
                 value={verifyStatus}
-                onValueChange={(v) => setVerifyStatus(v as DomainStatus)}
+                onValueChange={(v) =>
+                  handleVerifyStatusChange(v as DomainStatus)
+                }
               >
                 <SelectTrigger className="h-auto w-auto gap-1 rounded-full border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-80">
                   <StatusBadge status={verifyStatus} />
@@ -1205,21 +1242,21 @@ export default function VerifikasiDomain() {
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <Select
-                    value={selectedDetailUrl}
-                    onValueChange={setDetailByUrl}
+                    value={selectedCrawlId}
+                    onValueChange={setDetailByCrawlId}
                   >
                     <SelectTrigger className="h-8 text-xs min-w-0">
                       <SelectValue placeholder="Pilih URL" />
                     </SelectTrigger>
 
                     <SelectContent>
-                      {detailPages.map((page) => (
-                        <SelectItem key={page.url} value={page.url}>
+                      {detailPages.map((page, index) => (
+                        <SelectItem key={page.crawl_id} value={page.crawl_id}>
                           <span
                             className="block max-w-[360px] truncate"
                             title={page.url}
                           >
-                            {page.url}
+                            [{index + 1}] {page.url}
                           </span>
                         </SelectItem>
                       ))}
@@ -1233,22 +1270,22 @@ export default function VerifikasiDomain() {
                   variant="outline"
                   className="h-8 w-8 shrink-0"
                   onClick={() => {
-                    if (selectedDetailUrl) {
+                    if (detailData?.url) {
                       window.open(
-                        selectedDetailUrl,
+                        detailData.url,
                         "_blank",
                         "noopener,noreferrer",
                       );
                     }
                   }}
-                  disabled={!selectedDetailUrl}
+                  disabled={!detailData?.url}
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground truncate">
-                {selectedDetailUrl || "-"}
+                {detailData?.url || "-"}
               </p>
             )}
           </DialogHeader>

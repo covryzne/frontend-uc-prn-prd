@@ -48,6 +48,7 @@ export interface DomainDetailItemApi {
   keyword: string | null;
   confidence_score: number | null;
   reasoning: string | null;
+  user_reasoning?: string | null;
   inner_text: string | null;
   latest: LatestItemApi;
 }
@@ -62,6 +63,7 @@ export interface DomainDetailResponse {
 
 export interface UpdateDomainStatusPayload {
   status: ApiDomainStatus;
+  crawl_id?: string;
   reasoning_verificator?: string;
   verifier_user_id?: string;
   verifier_name?: string;
