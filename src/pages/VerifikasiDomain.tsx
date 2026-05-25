@@ -83,6 +83,7 @@ export default function VerifikasiDomain() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRefreshTick, setDetailRefreshTick] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<DomainStatus>("Pornografi");
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -515,7 +516,7 @@ export default function VerifikasiDomain() {
   ]);
 
   useEffect(() => {
-    if (!selectedDomain) return;
+    if (!selectedDomain || !detailOpen) return;
     let active = true;
     setDetailLoading(true);
     setDetailError(null);
@@ -541,7 +542,7 @@ export default function VerifikasiDomain() {
     return () => {
       active = false;
     };
-  }, [selectedDomain]);
+  }, [selectedDomain, detailOpen, detailRefreshTick]);
 
   const handleSaveStatus = async () => {
     if (!selectedDomain) return;
@@ -551,6 +552,7 @@ export default function VerifikasiDomain() {
         status: mapDomainStatusToApi(verifyStatus),
         reasoning_verificator: userReasoning || undefined,
       });
+      setDetailRefreshTick((prev) => prev + 1);
       setDetailOpen(false);
       setRefreshTick((prev) => prev + 1);
     } catch (error) {
