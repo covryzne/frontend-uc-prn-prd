@@ -205,7 +205,9 @@ export default function VerifikasiDomain() {
   const setDetailByUrl = (url: string) => {
     setSelectedDetailUrl(url);
     const selectedPage = detailPages.find((page) => page.url === url);
-    if (selectedPage) setVerifyStatus(selectedPage.status);
+    if (selectedPage) {
+      setVerifyStatus(selectedPage.status);
+    }
   };
 
   const goToRelativePage = (direction: -1 | 1) => {
