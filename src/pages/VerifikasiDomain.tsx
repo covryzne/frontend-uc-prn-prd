@@ -1156,7 +1156,7 @@ export default function VerifikasiDomain() {
 
       {/* Detail Modal */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader className="relative pr-20">
             <div className="absolute right-12 top-0">
               <Select
@@ -1204,14 +1204,19 @@ export default function VerifikasiDomain() {
                     value={selectedDetailUrl}
                     onValueChange={setDetailByUrl}
                   >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 text-xs min-w-0">
                       <SelectValue placeholder="Pilih URL" />
                     </SelectTrigger>
 
                     <SelectContent>
                       {detailPages.map((page) => (
                         <SelectItem key={page.url} value={page.url}>
-                          {page.url}
+                          <span
+                            className="block max-w-[360px] truncate"
+                            title={page.url}
+                          >
+                            {page.url}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1319,12 +1324,12 @@ export default function VerifikasiDomain() {
               <h4 className="text-sm font-semibold">
                 {uniqueDetailUrlCount} URL dalam domain ini
               </h4>
-              <div className="relative rounded-lg bg-muted aspect-video overflow-hidden border">
+              <div className="relative rounded-lg bg-muted aspect-video overflow-hidden border max-w-full">
                 {activeScreenshot ? (
                   <img
                     src={activeScreenshot.url}
                     alt={activeScreenshot.caption}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full max-w-full object-contain"
                     loading="lazy"
                   />
                 ) : (
