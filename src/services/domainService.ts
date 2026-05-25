@@ -3,18 +3,35 @@ import { apiClient } from "@/services/apiClient";
 
 export type ApiDomainStatus = "porno" | "non_porno" | "manual_check";
 
+export interface LatestCrawlApi {
+  timestamp: string | null;
+  url: string | null;
+  status_code: number | null;
+}
+
+export interface LatestScrapedApi {
+  thumbnail: string | null;
+  screenshot_path: string | null;
+}
+
+export interface LatestInferenceApi {
+  vit_score: number | null;
+  status: ApiDomainStatus | null;
+  overlay_image: string | null;
+}
+
+export interface LatestItemApi {
+  crawl: LatestCrawlApi;
+  scraped: LatestScrapedApi | null;
+  inference: LatestInferenceApi | null;
+}
+
 export interface DomainListItemApi {
   id: string;
   domain: string;
-  url: string[];
-  status: string[];
-  latestStatus?: string | null;
-  vitScore?: number | null;
-  finalScore: number;
-  screenshot: string[];
-  verifiedBy: (string | null)[];
-  verifiedAt: (string | null)[];
-  timestamp: string[];
+  latest: LatestItemApi;
+  verifiedBy?: string | null;
+  verifiedAt?: string | null;
   url_count: number;
 }
 
@@ -28,24 +45,17 @@ export interface DomainListResponse {
 
 export interface DomainDetailItemApi {
   crawl_id: string;
-  url: string;
   keyword: string | null;
-  timestamp: string | null;
-  status: string | null;
   confidence_score: number | null;
-  vit_score: number | null;
   reasoning: string | null;
   inner_text: string | null;
-  screenshot: string | null;
-  thumbnail: string | null;
-  is_amp: boolean;
+  latest: LatestItemApi;
 }
 
 export interface DomainDetailResponse {
   success: boolean;
   domain_id: string;
   domain_name: string;
-  domain_latest_status: string | null;
   reasoning_verificator: string | null;
   crawls: DomainDetailItemApi[];
 }

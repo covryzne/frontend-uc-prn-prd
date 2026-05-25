@@ -46,13 +46,36 @@ export interface VerifikasiTerakhirItem {
 
 export type DomainStatus = "Pornografi" | "Non-Pornografi" | "Manual Check";
 
+export interface LatestCrawl {
+  timestamp: string | null;
+  url: string | null;
+  status_code: number | null;
+}
+
+export interface LatestScraped {
+  thumbnail: string | null;
+  screenshot_path: string | null;
+}
+
+export interface LatestInference {
+  vit_score: number | null;
+  status: "porno" | "non_porno" | "manual_check" | null;
+  overlay_image: string | null;
+}
+
+export interface LatestItem {
+  crawl: LatestCrawl;
+  scraped: LatestScraped | null;
+  inference: LatestInference | null;
+}
+
 export interface DomainItem {
   id: string;
   timestamp: string;
   domain: string;
   status: DomainStatus;
-  score: number;
-  vitScore?: number;
+  score: number | null;
+  vitScore?: number | null;
   screenshot: string | null;
   verifikator: string | null;
   urlCount?: number;
@@ -67,9 +90,10 @@ export interface DomainDetailPage {
   user_reasoning?: string;
   kata_kunci: string[];
   crawled_at: string;
-  vit_score: number;
+  vit_score: number | null;
   screenshots: { url: string; caption: string }[];
   konten_terekstrak: string;
+  latest?: LatestItem;
 }
 
 export interface DomainDetail {
@@ -81,7 +105,7 @@ export interface DomainDetail {
   user_reasoning: string;
   kata_kunci: string[];
   crawled_at: string;
-  vit_score: number;
+  vit_score: number | null;
   screenshots: { url: string; caption: string }[];
   konten_terekstrak: string;
   total_url_in_domain: number;
